@@ -65,6 +65,9 @@ interface KafkaState {
   kafka: Kafka;
   initialized: boolean;
   controllerHistory: number[];
+  reportedController: number | null;
+  candidateController: number | null;
+  candidateStreak: number;
   producer: Producer | null;
   consumer: Consumer | null;
   subscribedTopics: Set<string>;
@@ -87,6 +90,9 @@ function getKafka(): Kafka {
       kafka,
       initialized: true,
       controllerHistory: [],
+      reportedController: null,
+      candidateController: null,
+      candidateStreak: 0,
       producer: null,
       consumer: null,
       subscribedTopics: new Set(),
@@ -97,6 +103,9 @@ function getKafka(): Kafka {
   } else {
     const s = globalForKafka.kafkaState as Partial<KafkaState> & { kafka: Kafka };
     if (!Array.isArray(s.controllerHistory)) s.controllerHistory = [];
+    if (!('reportedController' in s)) s.reportedController = null;
+    if (!('candidateController' in s)) s.candidateController = null;
+    if (typeof s.candidateStreak !== 'number') s.candidateStreak = 0;
     if (!('producer' in s)) s.producer = null;
     if (!('consumer' in s)) s.consumer = null;
     if (!(s.subscribedTopics instanceof Set)) s.subscribedTopics = new Set();
@@ -107,29 +116,58 @@ function getKafka(): Kafka {
   return globalForKafka.kafkaState.kafka;
 }
 
-const CONTROLLER_WINDOW = 7;
+const CONTROLLER_WINDOW = 20;
+const CONTROLLER_SWITCH_STREAK = 5;
 const MAX_PARTITION_MESSAGES = 200;
 const MAX_CALC_RESULTS = 100;
 
 function stabilizeController(rawController: number): number {
   const state = globalForKafka.kafkaState!;
+
   state.controllerHistory.push(rawController);
   if (state.controllerHistory.length > CONTROLLER_WINDOW) {
     state.controllerHistory.shift();
   }
+
   const counts = new Map<number, number>();
   for (const id of state.controllerHistory) {
     counts.set(id, (counts.get(id) ?? 0) + 1);
   }
-  let bestId = rawController;
-  let bestCount = -1;
+  let modeId = rawController;
+  let modeCount = -1;
   for (const [id, c] of counts) {
-    if (c > bestCount) {
-      bestCount = c;
-      bestId = id;
+    if (c > modeCount) {
+      modeCount = c;
+      modeId = id;
     }
   }
-  return bestId;
+
+  if (state.reportedController === null) {
+    state.reportedController = modeId;
+    state.candidateController = modeId;
+    state.candidateStreak = 0;
+    return modeId;
+  }
+
+  if (modeId === state.reportedController) {
+    state.candidateController = modeId;
+    state.candidateStreak = 0;
+    return state.reportedController;
+  }
+
+  if (modeId === state.candidateController) {
+    state.candidateStreak += 1;
+  } else {
+    state.candidateController = modeId;
+    state.candidateStreak = 1;
+  }
+
+  if (state.candidateStreak >= CONTROLLER_SWITCH_STREAK) {
+    state.reportedController = modeId;
+    state.candidateStreak = 0;
+  }
+
+  return state.reportedController;
 }
 
 async function withAdmin<T>(fn: (admin: Admin) => Promise<T>): Promise<T> {
