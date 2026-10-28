@@ -74,6 +74,12 @@ interface KafkaState {
   partitionMessages: Map<string, Map<number, PartitionMessage[]>>;
   calcResults: CalcResult[];
   consumerStarting: Promise<void> | null;
+  consumerMaxPerSecond: number;
+  nextConsumeSlotAt: number;
+}
+
+export interface ConsumerConfig {
+  maxPerSecond: number;
 }
 
 const globalForKafka = globalThis as unknown as { kafkaState?: KafkaState };
@@ -99,6 +105,8 @@ function getKafka(): Kafka {
       partitionMessages: new Map(),
       calcResults: [],
       consumerStarting: null,
+      consumerMaxPerSecond: 0,
+      nextConsumeSlotAt: 0,
     };
   } else {
     const s = globalForKafka.kafkaState as Partial<KafkaState> & { kafka: Kafka };
@@ -112,6 +120,8 @@ function getKafka(): Kafka {
     if (!(s.partitionMessages instanceof Map)) s.partitionMessages = new Map();
     if (!Array.isArray(s.calcResults)) s.calcResults = [];
     if (!('consumerStarting' in s)) s.consumerStarting = null;
+    if (typeof s.consumerMaxPerSecond !== 'number') s.consumerMaxPerSecond = 0;
+    if (typeof s.nextConsumeSlotAt !== 'number') s.nextConsumeSlotAt = 0;
   }
   return globalForKafka.kafkaState.kafka;
 }
@@ -120,6 +130,7 @@ const CONTROLLER_WINDOW = 20;
 const CONTROLLER_SWITCH_STREAK = 5;
 const MAX_PARTITION_MESSAGES = 200;
 const MAX_CALC_RESULTS = 100;
+export const MAX_CONSUMER_RATE = 1000;
 
 function stabilizeController(rawController: number): number {
   const state = globalForKafka.kafkaState!;
@@ -402,6 +413,37 @@ function storePartitionMessage(
   if (list.length > MAX_PARTITION_MESSAGES) list.length = MAX_PARTITION_MESSAGES;
 }
 
+// 메시지 간 최소 간격(1000 / maxPerSecond ms)을 보장. 0 이면 제한 없음.
+async function throttleConsume(): Promise<void> {
+  const state = globalForKafka.kafkaState!;
+  const rate = state.consumerMaxPerSecond;
+  if (rate <= 0) return;
+  const now = Date.now();
+  const slot = Math.max(now, state.nextConsumeSlotAt);
+  state.nextConsumeSlotAt = slot + 1000 / rate;
+  if (slot > now) await sleep(slot - now);
+}
+
+export function getConsumerConfig(): ConsumerConfig {
+  getKafka();
+  return { maxPerSecond: globalForKafka.kafkaState!.consumerMaxPerSecond };
+}
+
+export function setConsumerConfig(config: ConsumerConfig): ConsumerConfig {
+  const rate = config.maxPerSecond;
+  if (!Number.isInteger(rate) || rate < 0 || rate > MAX_CONSUMER_RATE) {
+    throw new Error(
+      `maxPerSecond 는 0 ~ ${MAX_CONSUMER_RATE} 사이의 정수여야 합니다 (0 = 제한 없음)`
+    );
+  }
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+  state.consumerMaxPerSecond = rate;
+  state.nextConsumeSlotAt = 0;
+  console.log(`[kafka] consumer rate limit set to ${rate || 'unlimited'} msg/s`);
+  return { maxPerSecond: rate };
+}
+
 async function startOrRestartConsumer(): Promise<void> {
   getKafka();
   const state = globalForKafka.kafkaState!;
@@ -440,6 +482,7 @@ async function startOrRestartConsumer(): Promise<void> {
   await consumer.run({
     eachMessage: async ({ topic, partition, message }) => {
       if (!message.value) return;
+      await throttleConsume();
       const raw = message.value.toString();
       let parsed: any = raw;
       try {
