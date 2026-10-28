@@ -1,75 +1,91 @@
 "use client";
 
-import type { BrokerMeta, PartitionMeta } from "./Dashboard";
+import type { BrokerMeta, TopicMeta } from "./Dashboard";
+import { colorForTopic } from "@/lib/colors";
 
 interface Props {
   brokers: BrokerMeta[];
-  partitions: PartitionMeta[];
+  topics: TopicMeta[];
   controller: number;
-  partitionTallies: Record<number, number>;
+  highlightedTopic: string | null;
+}
+
+interface PartitionAssignment {
+  topic: string;
+  partition: number;
+  role: "L" | "F";
 }
 
 export default function BrokerGrid({
   brokers,
-  partitions,
+  topics,
   controller,
-  partitionTallies,
+  highlightedTopic,
 }: Props) {
-  const partitionsByBroker = new Map<number, { partition: number; role: "L" | "F" }[]>();
-  for (const b of brokers) partitionsByBroker.set(b.id, []);
-  for (const p of partitions) {
-    for (const replicaId of p.replicas) {
-      if (!partitionsByBroker.has(replicaId))
-        partitionsByBroker.set(replicaId, []);
-      partitionsByBroker.get(replicaId)!.push({
-        partition: p.partition,
-        role: p.leader === replicaId ? "L" : "F",
-      });
+  const byBroker = new Map<number, PartitionAssignment[]>();
+  for (const b of brokers) byBroker.set(b.id, []);
+  for (const t of topics) {
+    if (t.isInternal) continue;
+    for (const p of t.partitions) {
+      for (const replicaId of p.replicas) {
+        if (!byBroker.has(replicaId)) byBroker.set(replicaId, []);
+        byBroker.get(replicaId)!.push({
+          topic: t.name,
+          partition: p.partition,
+          role: p.leader === replicaId ? "L" : "F",
+        });
+      }
     }
   }
 
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold">
             K
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">
-              Kafka Cluster · Broker 6대
+              Kafka Cluster · Broker {brokers.length}대
             </h2>
             <p className="text-xs text-zinc-500">
-              Topic <code className="text-orange-300">votes</code> ·
-              Partition 6 · Replication Factor 3
+              Topic 파티션이 Broker에 어떻게 분산됐는지 (★=Leader, ·=Follower)
             </p>
           </div>
         </div>
         <div className="text-xs text-zinc-500">
           Controller:{" "}
           <span className="text-amber-400 font-mono">
-            Broker {controller}
+            Broker {controller >= 0 ? controller : "?"}
           </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {brokers
           .sort((a, b) => a.id - b.id)
           .map((broker) => {
-            const myPartitions = partitionsByBroker.get(broker.id) ?? [];
+            const assignments = byBroker.get(broker.id) ?? [];
             const isController = broker.id === controller;
+
+            const byTopic = new Map<string, PartitionAssignment[]>();
+            for (const a of assignments) {
+              if (!byTopic.has(a.topic)) byTopic.set(a.topic, []);
+              byTopic.get(a.topic)!.push(a);
+            }
+
             return (
               <div
                 key={broker.id}
-                className={`p-2.5 rounded-lg border bg-zinc-950/60 ${
+                className={`p-3 rounded-lg border bg-zinc-950/60 min-h-[160px] ${
                   isController
                     ? "border-amber-500/50"
                     : "border-zinc-800"
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-zinc-800">
+                  <div className="text-sm font-semibold text-white flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     Broker {broker.id}
                     {isController && (
@@ -78,92 +94,97 @@ export default function BrokerGrid({
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-zinc-500">
+                  <span className="text-[10px] text-zinc-500 font-mono">
                     :{broker.port}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap gap-1">
-                  {myPartitions.length === 0 && (
-                    <span className="text-[10px] text-zinc-600 italic">
-                      (파티션 없음)
-                    </span>
+                <div className="space-y-1.5">
+                  {assignments.length === 0 && (
+                    <div className="text-[11px] text-zinc-600 italic text-center py-4">
+                      (저장된 파티션 없음)
+                    </div>
                   )}
-                  {myPartitions
-                    .sort((a, b) => a.partition - b.partition)
-                    .map((p) => {
-                      const count = partitionTallies[p.partition] ?? 0;
-                      return (
+                  {Array.from(byTopic.entries()).map(([topicName, parts]) => {
+                    const color = colorForTopic(topicName);
+                    const isHighlighted = highlightedTopic === topicName;
+                    return (
+                      <div
+                        key={topicName}
+                        className={`p-1.5 rounded border transition-all ${
+                          isHighlighted
+                            ? "bg-emerald-500/10 border-emerald-500/50 shadow-md shadow-emerald-500/20"
+                            : `${color.bg} ${color.border}`
+                        }`}
+                      >
                         <div
-                          key={p.partition}
-                          className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${
-                            p.role === "L"
-                              ? "bg-orange-500/20 border-orange-500/50 text-orange-200"
-                              : "bg-zinc-800/60 border-zinc-700 text-zinc-400"
+                          className={`text-[10px] font-mono truncate mb-1 ${
+                            isHighlighted ? "text-emerald-200" : color.text
                           }`}
-                          title={`Partition ${p.partition} - ${
-                            p.role === "L" ? "Leader" : "Follower"
-                          } - 메시지 ${count}건`}
+                          title={topicName}
                         >
-                          P{p.partition}
-                          <span className="opacity-70 ml-0.5">
-                            {p.role === "L" ? "★" : "·"}
-                          </span>
+                          {topicName}
                         </div>
-                      );
-                    })}
+                        <div className="flex flex-wrap gap-0.5">
+                          {parts
+                            .sort((a, b) => a.partition - b.partition)
+                            .map((p) => (
+                              <span
+                                key={p.partition}
+                                className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                                  p.role === "L"
+                                    ? "bg-black/40 text-white border border-white/20"
+                                    : "bg-black/20 text-zinc-300"
+                                }`}
+                                title={`Partition ${p.partition} - ${
+                                  p.role === "L" ? "Leader" : "Follower"
+                                }`}
+                              >
+                                P{p.partition}
+                                {p.role === "L" ? "★" : ""}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-zinc-800 text-[10px] text-zinc-500">
+                  총{" "}
+                  <span className="text-white font-mono">
+                    {assignments.length}
+                  </span>
+                  개 복제본 ·{" "}
+                  <span className="text-orange-300 font-mono">
+                    {assignments.filter((a) => a.role === "L").length}
+                  </span>
+                  개 Leader
                 </div>
               </div>
             );
           })}
       </div>
 
-      <div className="mt-3 flex items-center gap-3 text-[10px] text-zinc-500">
+      <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center gap-4 text-[10px] text-zinc-500">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-sm bg-orange-500/50 border border-orange-500/50" />
-          Leader (★)
+          <span className="text-white font-mono bg-black/40 border border-white/20 px-1 rounded">
+            P0★
+          </span>
+          Leader
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-sm bg-zinc-800 border border-zinc-700" />
-          Follower (·)
+          <span className="text-zinc-300 font-mono bg-black/20 px-1 rounded">
+            P1
+          </span>
+          Follower
         </span>
         <span className="flex items-center gap-1 ml-auto">
           <span className="text-amber-300 font-mono text-[9px] bg-amber-500/30 border border-amber-500/50 px-1 rounded">
             CTRL
           </span>
-          Controller
+          Controller Broker
         </span>
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-zinc-800">
-        <div className="text-xs text-zinc-500 mb-1.5">파티션별 메시지 분포</div>
-        <div className="grid grid-cols-6 gap-1">
-          {Array.from({ length: 6 }).map((_, i) => {
-            const count = partitionTallies[i] ?? 0;
-            const max = Math.max(1, ...Object.values(partitionTallies));
-            const height = Math.round((count / max) * 100);
-            return (
-              <div
-                key={i}
-                className="flex flex-col items-center"
-                title={`P${i}: ${count}건`}
-              >
-                <div className="w-full h-12 bg-zinc-950 rounded flex items-end overflow-hidden border border-zinc-800">
-                  <div
-                    className="w-full bg-gradient-to-t from-orange-500/70 to-orange-500/30 transition-all"
-                    style={{ height: `${height}%` }}
-                  />
-                </div>
-                <div className="text-[9px] text-zinc-500 mt-1 font-mono">
-                  P{i}
-                </div>
-                <div className="text-[9px] text-zinc-400 font-mono">
-                  {count}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     </div>
   );

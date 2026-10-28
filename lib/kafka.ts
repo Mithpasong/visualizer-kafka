@@ -1,24 +1,4 @@
-import { Kafka, Producer, Consumer, Admin, logLevel } from 'kafkajs';
-
-export const TOPIC = 'votes';
-export const NUM_PARTITIONS = 6;
-export const REPLICATION_FACTOR = 3;
-
-export const VOTE_OPTIONS = [
-  { id: 'javascript', label: 'JavaScript', color: 'yellow' },
-  { id: 'python', label: 'Python', color: 'sky' },
-  { id: 'java', label: 'Java', color: 'orange' },
-  { id: 'go', label: 'Go', color: 'cyan' },
-  { id: 'rust', label: 'Rust', color: 'red' },
-  { id: 'typescript', label: 'TypeScript', color: 'blue' },
-] as const;
-
-export type VoteOptionId = typeof VOTE_OPTIONS[number]['id'];
-
-export const CONSUMER_GROUPS = [
-  { id: 'vote-counter', label: '집계 서비스' },
-  { id: 'live-feed', label: '실시간 피드' },
-] as const;
+import { Kafka, Admin, logLevel } from 'kafkajs';
 
 export const BROKERS = [
   { id: 1, name: 'kafka-1', externalPort: 9092 },
@@ -33,21 +13,6 @@ export const BOOTSTRAP_SERVERS = BROKERS.map(
   (b) => `localhost:${b.externalPort}`
 );
 
-export interface VoteMessage {
-  voteId: string;
-  option: VoteOptionId;
-  voter: string;
-  createdAt: string;
-}
-
-export interface ConsumedRecord {
-  partition: number;
-  offset: string;
-  key: string;
-  value: VoteMessage;
-  consumedAt: string;
-}
-
 export interface PartitionMetadata {
   partition: number;
   leader: number;
@@ -55,200 +20,148 @@ export interface PartitionMetadata {
   isr: number[];
 }
 
+export interface TopicMetadata {
+  name: string;
+  partitions: PartitionMetadata[];
+  numPartitions: number;
+  replicationFactor: number;
+  isInternal: boolean;
+}
+
+export interface BrokerMetadata {
+  id: number;
+  host: string;
+  port: number;
+}
+
 interface KafkaState {
   kafka: Kafka;
-  admin: Admin;
-  producer: Producer;
-  consumers: Record<string, Consumer>;
-  consumed: Record<string, ConsumedRecord[]>;
-  produced: ConsumedRecord[];
-  tallies: Record<VoteOptionId, number>;
-  partitionTallies: Record<number, number>;
   initialized: boolean;
-  initializing: Promise<void> | null;
 }
 
 const globalForKafka = globalThis as unknown as { kafkaState?: KafkaState };
 
-function createState(): KafkaState {
-  const kafka = new Kafka({
-    clientId: 'nextjs-cluster-demo',
-    brokers: BOOTSTRAP_SERVERS,
-    logLevel: logLevel.ERROR,
-    retry: { retries: 8, initialRetryTime: 300 },
-  });
-
-  const admin = kafka.admin();
-  const producer = kafka.producer({ allowAutoTopicCreation: false });
-  const consumers: Record<string, Consumer> = {};
-  const consumed: Record<string, ConsumedRecord[]> = {};
-
-  for (const group of CONSUMER_GROUPS) {
-    consumers[group.id] = kafka.consumer({
-      groupId: group.id,
-      sessionTimeout: 30000,
-      heartbeatInterval: 3000,
+function getKafka(): Kafka {
+  if (!globalForKafka.kafkaState) {
+    const kafka = new Kafka({
+      clientId: 'nextjs-topic-manager',
+      brokers: BOOTSTRAP_SERVERS,
+      logLevel: logLevel.ERROR,
+      retry: { retries: 5, initialRetryTime: 300 },
     });
-    consumed[group.id] = [];
+    globalForKafka.kafkaState = { kafka, initialized: true };
   }
-
-  const tallies = Object.fromEntries(
-    VOTE_OPTIONS.map((o) => [o.id, 0])
-  ) as Record<VoteOptionId, number>;
-
-  const partitionTallies: Record<number, number> = {};
-  for (let i = 0; i < NUM_PARTITIONS; i++) partitionTallies[i] = 0;
-
-  return {
-    kafka,
-    admin,
-    producer,
-    consumers,
-    consumed,
-    produced: [],
-    tallies,
-    partitionTallies,
-    initialized: false,
-    initializing: null,
-  };
+  return globalForKafka.kafkaState.kafka;
 }
 
-const MAX_RECORDS = 60;
-
-function pushRecord(list: ConsumedRecord[], record: ConsumedRecord) {
-  list.unshift(record);
-  if (list.length > MAX_RECORDS) list.length = MAX_RECORDS;
-}
-
-async function ensureTopic(state: KafkaState) {
-  await state.admin.connect();
+async function withAdmin<T>(fn: (admin: Admin) => Promise<T>): Promise<T> {
+  const admin = getKafka().admin();
+  await admin.connect();
   try {
-    const existing = await state.admin.listTopics();
-    if (!existing.includes(TOPIC)) {
-      await state.admin.createTopics({
+    return await fn(admin);
+  } finally {
+    await admin.disconnect();
+  }
+}
+
+export async function listTopicsWithMetadata(
+  includeInternal = false
+): Promise<TopicMetadata[]> {
+  return withAdmin(async (admin) => {
+    const topicNames = await admin.listTopics();
+    const filtered = includeInternal
+      ? topicNames
+      : topicNames.filter((n) => !n.startsWith('__'));
+
+    if (filtered.length === 0) return [];
+
+    const meta = await admin.fetchTopicMetadata({ topics: filtered });
+
+    return meta.topics.map((t) => {
+      const partitions: PartitionMetadata[] = t.partitions.map((p) => ({
+        partition: p.partitionId,
+        leader: p.leader,
+        replicas: p.replicas,
+        isr: p.isr,
+      }));
+      const rf = partitions[0]?.replicas.length ?? 0;
+      return {
+        name: t.name,
+        partitions: partitions.sort((a, b) => a.partition - b.partition),
+        numPartitions: partitions.length,
+        replicationFactor: rf,
+        isInternal: t.name.startsWith('__'),
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  });
+}
+
+export async function createTopic(
+  name: string,
+  numPartitions: number,
+  replicationFactor: number
+) {
+  return withAdmin(async (admin) => {
+    const cluster = await admin.describeCluster();
+    const aliveBrokers = cluster.brokers.length;
+    if (replicationFactor > aliveBrokers) {
+      throw new Error(
+        `Replication Factor ${replicationFactor} > 살아있는 Broker ${aliveBrokers}대. 더 낮은 RF를 사용하세요.`
+      );
+    }
+
+    const topics = await admin.listTopics();
+    if (topics.includes(name)) {
+      throw new Error(`Topic "${name}" 이미 존재합니다`);
+    }
+
+    try {
+      const ok = await admin.createTopics({
+        validateOnly: false,
         waitForLeaders: true,
+        timeout: 30000,
         topics: [
           {
-            topic: TOPIC,
-            numPartitions: NUM_PARTITIONS,
-            replicationFactor: REPLICATION_FACTOR,
+            topic: name,
+            numPartitions,
+            replicationFactor,
           },
         ],
       });
-      console.log(
-        `[kafka] topic "${TOPIC}" created (partitions=${NUM_PARTITIONS}, rf=${REPLICATION_FACTOR})`
-      );
+      if (!ok) {
+        throw new Error(
+          `Kafka 가 토픽 생성을 거부했습니다 (이미 존재하거나 설정 문제)`
+        );
+      }
+    } catch (err: any) {
+      const inner = err?.message || String(err);
+      const errorsField = err?.errors
+        ? ` | errors: ${JSON.stringify(err.errors)}`
+        : '';
+      const topicErrors = err?.topicErrors
+        ? ` | topicErrors: ${JSON.stringify(err.topicErrors)}`
+        : '';
+      console.error('[kafka] createTopic failed', err);
+      throw new Error(`${inner}${errorsField}${topicErrors}`);
     }
-  } finally {
-    await state.admin.disconnect();
-  }
-}
 
-async function initConsumers(state: KafkaState) {
-  for (const group of CONSUMER_GROUPS) {
-    const consumer = state.consumers[group.id];
-    await consumer.connect();
-    await consumer.subscribe({ topic: TOPIC, fromBeginning: true });
-    await consumer.run({
-      eachMessage: async ({ partition, message }) => {
-        if (!message.value) return;
-        try {
-          const value = JSON.parse(message.value.toString()) as VoteMessage;
-          const record: ConsumedRecord = {
-            partition,
-            offset: message.offset,
-            key: message.key?.toString() ?? '',
-            value,
-            consumedAt: new Date().toISOString(),
-          };
-          pushRecord(state.consumed[group.id], record);
-          if (group.id === 'vote-counter') {
-            state.tallies[value.option] =
-              (state.tallies[value.option] ?? 0) + 1;
-            state.partitionTallies[partition] =
-              (state.partitionTallies[partition] ?? 0) + 1;
-          }
-        } catch (err) {
-          console.error(`[${group.id}] parse error`, err);
-        }
-      },
-    });
-    console.log(`[kafka] consumer "${group.id}" started`);
-  }
-}
-
-export async function getKafka(): Promise<KafkaState> {
-  if (!globalForKafka.kafkaState) {
-    globalForKafka.kafkaState = createState();
-  }
-  const state = globalForKafka.kafkaState;
-
-  if (state.initialized) return state;
-  if (state.initializing) {
-    await state.initializing;
-    return state;
-  }
-
-  state.initializing = (async () => {
-    try {
-      await ensureTopic(state);
-      await state.producer.connect();
-      await initConsumers(state);
-      state.initialized = true;
-      console.log('[kafka] cluster demo initialized');
-    } catch (err) {
-      state.initializing = null;
-      throw err;
-    }
-  })();
-
-  await state.initializing;
-  state.initializing = null;
-  return state;
-}
-
-export async function sendVote(vote: VoteMessage) {
-  const state = await getKafka();
-  const result = await state.producer.send({
-    topic: TOPIC,
-    acks: -1,
-    messages: [
-      {
-        key: vote.option,
-        value: JSON.stringify(vote),
-      },
-    ],
+    return { name, numPartitions, replicationFactor };
   });
-
-  const meta = result[0];
-  pushRecord(state.produced, {
-    partition: meta.partition,
-    offset: String(meta.baseOffset ?? '?'),
-    key: vote.option,
-    value: vote,
-    consumedAt: new Date().toISOString(),
-  });
-  return meta;
 }
 
-export async function getBrokerMetadata() {
-  const state = await getKafka();
-  const admin = state.kafka.admin();
-  await admin.connect();
-  try {
+export async function deleteTopic(name: string) {
+  return withAdmin(async (admin) => {
+    await admin.deleteTopics({ topics: [name] });
+    return { name };
+  });
+}
+
+export async function getBrokers(): Promise<{
+  brokers: BrokerMetadata[];
+  controller: number;
+}> {
+  return withAdmin(async (admin) => {
     const cluster = await admin.describeCluster();
-    const topicMeta = await admin.fetchTopicMetadata({ topics: [TOPIC] });
-    const topic = topicMeta.topics[0];
-
-    const partitions: PartitionMetadata[] = topic
-      ? topic.partitions.map((p) => ({
-          partition: p.partitionId,
-          leader: p.leader,
-          replicas: p.replicas,
-          isr: p.isr,
-        }))
-      : [];
-
     return {
       brokers: cluster.brokers.map((b) => ({
         id: b.nodeId,
@@ -256,25 +169,6 @@ export async function getBrokerMetadata() {
         port: b.port,
       })),
       controller: cluster.controller,
-      partitions,
     };
-  } finally {
-    await admin.disconnect();
-  }
-}
-
-export async function getSnapshot() {
-  const state = await getKafka();
-  return {
-    topic: TOPIC,
-    partitionCount: NUM_PARTITIONS,
-    replicationFactor: REPLICATION_FACTOR,
-    voteOptions: VOTE_OPTIONS,
-    groups: CONSUMER_GROUPS,
-    produced: state.produced,
-    consumed: state.consumed,
-    tallies: state.tallies,
-    partitionTallies: state.partitionTallies,
-    totalVotes: Object.values(state.tallies).reduce((a, b) => a + b, 0),
-  };
+  });
 }

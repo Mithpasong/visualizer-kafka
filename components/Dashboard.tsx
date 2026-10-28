@@ -1,49 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import VotePanel from "./VotePanel";
+import { useCallback, useEffect, useState } from "react";
+import CreateTopicForm from "./CreateTopicForm";
+import TopicList from "./TopicList";
 import BrokerGrid from "./BrokerGrid";
-import VoteResults from "./VoteResults";
-import LiveFeed from "./LiveFeed";
-
-export interface VoteMessage {
-  voteId: string;
-  option: string;
-  voter: string;
-  createdAt: string;
-}
-
-export interface ConsumedRecord {
-  partition: number;
-  offset: string;
-  key: string;
-  value: VoteMessage;
-  consumedAt: string;
-}
-
-export interface VoteOption {
-  id: string;
-  label: string;
-  color: string;
-}
-
-export interface Group {
-  id: string;
-  label: string;
-}
-
-export interface Snapshot {
-  topic: string;
-  partitionCount: number;
-  replicationFactor: number;
-  voteOptions: VoteOption[];
-  groups: Group[];
-  produced: ConsumedRecord[];
-  consumed: Record<string, ConsumedRecord[]>;
-  tallies: Record<string, number>;
-  partitionTallies: Record<number, number>;
-  totalVotes: number;
-}
 
 export interface PartitionMeta {
   partition: number;
@@ -52,80 +12,134 @@ export interface PartitionMeta {
   isr: number[];
 }
 
+export interface TopicMeta {
+  name: string;
+  partitions: PartitionMeta[];
+  numPartitions: number;
+  replicationFactor: number;
+  isInternal: boolean;
+}
+
 export interface BrokerMeta {
   id: number;
   host: string;
   port: number;
 }
 
-export interface BrokersResponse {
-  brokers: BrokerMeta[];
-  controller: number;
-  partitions: PartitionMeta[];
+export interface Notice {
+  id: string;
+  type: "success" | "error" | "info";
+  message: string;
 }
 
 export default function Dashboard() {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [brokers, setBrokers] = useState<BrokersResponse | null>(null);
+  const [topics, setTopics] = useState<TopicMeta[]>([]);
+  const [brokers, setBrokers] = useState<BrokerMeta[]>([]);
+  const [controller, setController] = useState<number>(-1);
   const [error, setError] = useState<string | null>(null);
-  const [autoVote, setAutoVote] = useState(false);
-  const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [highlightedTopic, setHighlightedTopic] = useState<string | null>(null);
+  const [showInternal, setShowInternal] = useState(false);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statsRes, brokersRes] = await Promise.all([
-        fetch("/api/stats", { cache: "no-store" }),
+      const [tRes, bRes] = await Promise.all([
+        fetch(`/api/topics?internal=${showInternal}`, { cache: "no-store" }),
         fetch("/api/brokers", { cache: "no-store" }),
       ]);
-      const stats = await statsRes.json();
-      const brokers = await brokersRes.json();
-      if (stats.success) setSnapshot(stats);
-      else setError(stats.error);
-      if (brokers.success) setBrokers(brokers);
+      const t = await tRes.json();
+      const b = await bRes.json();
+      if (t.success) {
+        setTopics(t.topics);
+        setError(null);
+      } else {
+        setError(t.error);
+      }
+      if (b.success) {
+        setBrokers(b.brokers);
+        setController(b.controller);
+      }
     } catch (err: any) {
       setError(err?.message ?? String(err));
     }
-  }, []);
-
-  const vote = useCallback(
-    async (option?: string) => {
-      try {
-        await fetch("/api/produce", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(option ? { option } : {}),
-        });
-      } catch {}
-    },
-    []
-  );
+  }, [showInternal]);
 
   useEffect(() => {
     fetchAll();
-    const id = setInterval(fetchAll, 1000);
+    const id = setInterval(fetchAll, 1500);
     return () => clearInterval(id);
   }, [fetchAll]);
 
-  useEffect(() => {
-    if (autoVote) {
-      autoTimer.current = setInterval(() => vote(), 800);
-    }
-    return () => {
-      if (autoTimer.current) clearInterval(autoTimer.current);
-    };
-  }, [autoVote, vote]);
+  const pushNotice = useCallback((n: Omit<Notice, "id">) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    const notice: Notice = { id, ...n };
+    setNotices((prev) => [...prev, notice]);
+    setTimeout(() => {
+      setNotices((prev) => prev.filter((x) => x.id !== id));
+    }, 4000);
+  }, []);
 
-  const connected = !!snapshot && !error;
+  const createTopic = useCallback(
+    async (name: string, numPartitions: number, replicationFactor: number) => {
+      try {
+        const res = await fetch("/api/topics", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name, numPartitions, replicationFactor }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          pushNotice({ type: "error", message: `실패: ${data.error}` });
+          return false;
+        }
+        pushNotice({
+          type: "success",
+          message: `✓ "${name}" 토픽 생성 (파티션 ${numPartitions}, RF ${replicationFactor})`,
+        });
+        setHighlightedTopic(name);
+        setTimeout(() => setHighlightedTopic(null), 5000);
+        fetchAll();
+        return true;
+      } catch (err: any) {
+        pushNotice({ type: "error", message: err?.message ?? String(err) });
+        return false;
+      }
+    },
+    [fetchAll, pushNotice]
+  );
+
+  const deleteTopic = useCallback(
+    async (name: string) => {
+      if (!confirm(`"${name}" 토픽을 정말 삭제할까요?`)) return;
+      try {
+        const res = await fetch(`/api/topics/${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        if (!data.success) {
+          pushNotice({ type: "error", message: `삭제 실패: ${data.error}` });
+          return;
+        }
+        pushNotice({ type: "info", message: `"${name}" 삭제됨` });
+        fetchAll();
+      } catch (err: any) {
+        pushNotice({ type: "error", message: err?.message ?? String(err) });
+      }
+    },
+    [fetchAll, pushNotice]
+  );
+
+  const connected = brokers.length > 0 && !error;
 
   return (
     <main className="min-h-screen p-6 max-w-[1800px] mx-auto">
       <header className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">
-            Kafka Cluster 실시간 투표
+            Kafka Topic Manager
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Broker 6대 클러스터 · 가장 좋아하는 프로그래밍 언어는?
+            Next.js에서 Kafka Topic 생성 · 삭제 · 클러스터 분산 시각화
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -142,8 +156,8 @@ export default function Dashboard() {
               }`}
             />
             {connected
-              ? `Cluster 연결됨 (${brokers?.brokers.length ?? "?"}대 Broker)`
-              : "연결 끊김"}
+              ? `Cluster 연결됨 (${brokers.length}대 Broker)`
+              : "Cluster 연결 끊김"}
           </span>
           <a
             href="http://localhost:8080"
@@ -151,7 +165,7 @@ export default function Dashboard() {
             rel="noreferrer"
             className="text-xs px-3 py-1.5 rounded-full border border-zinc-700 hover:border-zinc-500 text-zinc-300"
           >
-            Kafka UI 열기 ↗
+            Kafka UI ↗
           </a>
         </div>
       </header>
@@ -160,47 +174,58 @@ export default function Dashboard() {
         <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-300">
           <strong>연결 실패:</strong> {error}
           <div className="mt-1 text-xs text-red-400/80">
-            6개 Broker 모두 떠있는지 확인하세요: <code>docker compose ps</code>
+            Kafka 클러스터가 실행 중인지 확인하세요:{" "}
+            <code>docker compose ps</code>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-12 gap-4">
-        <section className="col-span-12 xl:col-span-3">
-          <VotePanel
-            options={snapshot?.voteOptions ?? []}
-            onVote={vote}
-            autoVote={autoVote}
-            onToggleAuto={() => setAutoVote((v) => !v)}
-            totalVotes={snapshot?.totalVotes ?? 0}
+        <section className="col-span-12 lg:col-span-4">
+          <CreateTopicForm
+            onCreate={createTopic}
+            maxBrokers={brokers.length || 6}
           />
         </section>
-
-        <section className="col-span-12 xl:col-span-6 space-y-4">
+        <section className="col-span-12 lg:col-span-8">
+          <TopicList
+            topics={topics}
+            onDelete={deleteTopic}
+            highlightedTopic={highlightedTopic}
+            showInternal={showInternal}
+            onToggleInternal={() => setShowInternal((v) => !v)}
+          />
+        </section>
+        <section className="col-span-12">
           <BrokerGrid
-            brokers={brokers?.brokers ?? []}
-            partitions={brokers?.partitions ?? []}
-            controller={brokers?.controller ?? -1}
-            partitionTallies={snapshot?.partitionTallies ?? {}}
-          />
-          <VoteResults
-            options={snapshot?.voteOptions ?? []}
-            tallies={snapshot?.tallies ?? {}}
-            totalVotes={snapshot?.totalVotes ?? 0}
-          />
-        </section>
-
-        <section className="col-span-12 xl:col-span-3">
-          <LiveFeed
-            records={snapshot?.consumed["live-feed"] ?? []}
-            options={snapshot?.voteOptions ?? []}
+            brokers={brokers}
+            topics={topics}
+            controller={controller}
+            highlightedTopic={highlightedTopic}
           />
         </section>
       </div>
 
+      <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50">
+        {notices.map((n) => (
+          <div
+            key={n.id}
+            className={`px-4 py-3 rounded-lg border shadow-xl text-sm animate-slide-in min-w-[280px] max-w-[480px] ${
+              n.type === "success"
+                ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-200"
+                : n.type === "error"
+                ? "bg-red-500/15 border-red-500/50 text-red-200"
+                : "bg-zinc-800/90 border-zinc-700 text-zinc-200"
+            }`}
+          >
+            {n.message}
+          </div>
+        ))}
+      </div>
+
       <footer className="mt-8 text-xs text-zinc-500 text-center">
-        topic: <code className="text-zinc-400">votes</code> · partitions: 6 ·
-        replication: 3 · brokers: 6 · consumer groups: 2
+        bootstrap: <code className="text-zinc-400">localhost:9092,...,9592</code>{" "}
+        · 1.5초마다 폴링
       </footer>
     </main>
   );

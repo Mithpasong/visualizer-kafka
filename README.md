@@ -1,49 +1,50 @@
-# Kafka Cluster + Next.js 실시간 투표 데모
+# Kafka Topic Manager
 
-**Broker 6대 클러스터**로 구성한 실제 Kafka 환경에서, 실시간 투표 이벤트가 어떻게 분산 저장/소비되는지 시각화합니다.
+Next.js UI에서 **Kafka Topic을 생성/삭제** 하고, **6개 Broker 클러스터에 파티션이 어떻게 분산되는지** 실시간으로 시각화하는 데모.
 
 ## 핵심 포인트
 
-- **Broker 6대** KRaft 모드 클러스터 (Zookeeper 불필요)
-- **Topic: `votes`** · Partition 6개 · Replication Factor 3
-  - → 각 파티션의 데이터가 **3개 Broker에 복제**됨
-  - → 어느 Broker 2대 죽어도 서비스 유지
-- **Partition Key = 투표 옵션 ID**
-  - → 같은 언어 투표는 항상 같은 파티션으로
-- **2개 Consumer Group**: 
-  - `vote-counter` (집계)
-  - `live-feed` (실시간 피드)
+- **Topic 생성 폼**: 이름, Partition 수, Replication Factor 지정
+- **생성 즉시 반영**: Topic List 에 `NEW` 뱃지로 하이라이트
+- **Broker Grid**: 6개 Broker에 각 Topic의 파티션(Leader/Follower)이 어떻게 할당됐는지 색상으로 매칭
+- **삭제 가능**: 토픽 옆 "삭제" 버튼
+- **색상 자동 할당**: Topic 이름 해시 기반, Topic 리스트와 Broker Grid에서 동일 색상
+- **Under-replicated 감지**: ISR < RF 일 때 ⚠ 표시
+- **시스템 토픽 토글**: `__consumer_offsets` 같은 내부 토픽 보기 on/off
 
 ## 아키텍처
 
 ```
-                          Next.js (localhost:3000)
-                                  │
-         ┌────────────────────────┼────────────────────────┐
-         │ Producer (투표 전송)   │  Consumer × 2 (수신)    │
-         │                        ▼                         │
-         │    ┌─────────────────────────────────────────┐  │
-         │    │          Kafka Cluster (6 Brokers)       │  │
-         │    │                                           │  │
-         │    │  kafka-1  kafka-2  kafka-3                │  │
-         │    │  :9092    :9192    :9292                  │  │
-         │    │                                           │  │
-         │    │  kafka-4  kafka-5  kafka-6                │  │
-         │    │  :9392    :9492    :9592                  │  │
-         │    │                                           │  │
-         │    │  Topic: votes (P0~P5, RF=3)              │  │
-         │    └─────────────────────────────────────────┘  │
-         └──────────────────────────────────────────────────┘
-                        ▲
-                        │
-                  Kafka UI :8080
+┌───────────────────────────────────────────────────────┐
+│                 Next.js (localhost:3000)              │
+│                                                        │
+│   [Create Form]  →  POST /api/topics                  │
+│                              │                         │
+│                              ▼                         │
+│                     kafkajs admin API                  │
+│                              │                         │
+└──────────────────────────────┼─────────────────────────┘
+                               │
+          ┌────────────────────┼────────────────────────┐
+          │        Kafka Cluster (6 Brokers, KRaft)     │
+          │                                              │
+          │  kafka-1  kafka-2  kafka-3                   │
+          │  :9092    :9192    :9292                     │
+          │                                              │
+          │  kafka-4  kafka-5  kafka-6                   │
+          │  :9392    :9492    :9592                     │
+          │                                              │
+          │  (Topic/Partition/Replica 자동 분산)         │
+          └──────────────────────────────────────────────┘
+                               ▲
+                               │
+                         Kafka UI :8080
 ```
 
 ## 시스템 요구사항
 
-- **Docker Desktop** (실행 중이어야 함)
-- **메모리 최소 6GB 할당** 권장 (Broker 6대 + Kafka UI)
-  - Docker Desktop → Settings → Resources → Memory 로 조정
+- **Docker Desktop** (실행 중)
+- Docker **메모리 6GB 이상** 할당 권장 (Broker 6대)
 - 디스크 ~5GB 여유 공간
 
 ## 실행 방법
@@ -54,21 +55,15 @@
 docker compose up -d
 ```
 
-6대 Broker + Kafka UI 가 전부 뜰 때까지 1~2분 소요.
-확인:
+6대 Broker + Kafka UI 가 올라옵니다 (처음은 1~2분 소요).
+
+### 2. 상태 확인
 
 ```bash
 docker compose ps
 ```
 
-**모든 컨테이너가 `Up` 상태인지 확인하세요.** 특히 처음엔 Broker들 간 리더 선출에 시간이 걸립니다.
-
-### 2. 상태 체크
-
-```bash
-docker exec kafka-1 /opt/kafka/bin/kafka-metadata-quorum.sh \
-  --bootstrap-server localhost:9092 describe --status
-```
+7개 모두 `Up` 이어야 합니다.
 
 ### 3. Next.js 앱 실행
 
@@ -79,87 +74,75 @@ npm run dev
 
 ### 4. 브라우저 열기
 
-- http://localhost:3000 → 데모 대시보드
-- http://localhost:8080 → Kafka UI (6대 클러스터 관리)
+- http://localhost:3000 → Topic Manager
+- http://localhost:8080 → Kafka UI (6대 클러스터)
 
 ## 사용법
 
-1. 좌측 **투표 버튼** (JavaScript / Python / Java / Go / Rust / TypeScript) 클릭
-2. 가운데 **Broker Grid**:
-   - 각 Broker가 어떤 Partition을 담당하는지 (★=Leader, ·=Follower)
-   - Controller 라벨 (`CTRL`): 현재 메타데이터 관리하는 Broker
-   - 하단 막대 그래프: 파티션별 메시지 분포
-3. 가운데 하단 **투표 결과**: Consumer가 실시간 집계
-4. 우측 **Live Feed**: 두 번째 Consumer Group이 수신한 스트림
+1. 좌측 **"새 Topic 생성"** 폼에서:
+   - 이름 입력 (예: `user-events`)
+   - Partitions 슬라이더로 조정
+   - Replication 슬라이더로 조정 (최대 Broker 수 = 6)
+2. **"Topic 생성 →"** 클릭
+3. 우측 Topic List 에 즉시 반영 (NEW 뱃지 5초간)
+4. 하단 Broker Grid 에서 **방금 만든 Topic의 파티션 분산**이 색상으로 보임
+5. Topic 옆 **"삭제"** 로 제거 가능
 
-## 보이는 포인트
+## API 엔드포인트
 
-| 개념 | 어디서 확인 |
-|------|------------|
-| Broker 6대 | 가운데 Broker Grid (6개 카드) |
-| Topic/Partition 분산 | 각 Broker 카드 안의 P0~P5 뱃지 |
-| Leader/Follower | ★(Leader) vs ·(Follower) |
-| Controller | `CTRL` 금색 뱃지 |
-| Replication Factor 3 | 각 파티션이 3개 Broker에 복제 (뱃지 3번 보임) |
-| Partition Key 효과 | 투표 옵션별로 특정 파티션에 집중 |
-| 2개 Consumer Group 독립 소비 | 결과 집계 + Live Feed 양쪽에 같은 메시지 |
-
-## 유용한 명령
-
-```bash
-# 특정 Broker 로그 보기
-docker compose logs -f kafka-1
-
-# 모든 Broker 중지
-docker compose down
-
-# 데이터까지 완전 초기화
-docker compose down -v
-
-# Topic 상세 (Leader/ISR 등)
-docker exec kafka-1 /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
-  --describe --topic votes
-```
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/topics?internal=true` | 모든 토픽 (파티션/ISR 포함) |
+| POST | `/api/topics` | Topic 생성 `{ name, numPartitions, replicationFactor }` |
+| DELETE | `/api/topics/[name]` | Topic 삭제 |
+| GET | `/api/brokers` | Broker/Controller 정보 |
 
 ## 코드 구조
 
 ```
 .
-├── docker-compose.yml      # Kafka 6대 + Kafka UI
-├── lib/kafka.ts            # 클러스터 연결, Admin, Producer, Consumer
+├── docker-compose.yml       # Kafka 6대 + Kafka UI
+├── lib/
+│   ├── kafka.ts             # Admin API 래퍼 (list/create/delete)
+│   └── colors.ts            # Topic별 색상 해시
 ├── app/
-│   ├── page.tsx            # 메인 페이지
+│   ├── page.tsx
 │   ├── layout.tsx
 │   └── api/
-│       ├── produce/        # POST: 투표 전송
-│       ├── stats/          # GET: 집계/피드 데이터
-│       └── brokers/        # GET: Broker 메타데이터 (Leader/ISR)
+│       ├── topics/
+│       │   ├── route.ts     # GET list, POST create
+│       │   └── [name]/
+│       │       └── route.ts # DELETE
+│       └── brokers/
+│           └── route.ts     # GET cluster info
 └── components/
-    ├── Dashboard.tsx       # 전체 레이아웃
-    ├── VotePanel.tsx       # 투표 버튼 (Producer)
-    ├── BrokerGrid.tsx      # 6개 Broker + 파티션 할당 시각화
-    ├── VoteResults.tsx     # 집계 결과 (Consumer 1)
-    └── LiveFeed.tsx        # 실시간 투표 피드 (Consumer 2)
+    ├── Dashboard.tsx        # 전체 레이아웃 + 폴링
+    ├── CreateTopicForm.tsx  # 생성 폼
+    ├── TopicList.tsx        # 토픽 리스트
+    └── BrokerGrid.tsx       # 6개 Broker 시각화
 ```
+
+## 실습 아이디어
+
+- **Partition 많이 가진 Topic**: 20개 Partition으로 생성 → 6대 Broker에 어떻게 분산되는지
+- **Replication Factor 1**: 복제본 없음 → 각 Broker에 Leader 하나씩만
+- **Replication Factor 6**: 모든 Broker가 복제본 보유
+- **Replication Factor > Broker 수**: 에러 메시지 확인
+- **같은 이름 중복 생성**: 에러 처리 확인
+- **Kafka UI(:8080)와 비교**: 같은 Topic이 양쪽에서 동일하게 보임
 
 ## 트러블슈팅
 
-### Broker가 시작은 되는데 Topic 생성이 안됨
-- 6대 Broker 간 리더 선출에 시간이 걸림 → 1~2분 기다리기
-- `docker compose logs kafka-1 | grep -i error`
+### "Cluster 연결 끊김"
+- `docker compose ps` 로 6대 Broker 모두 `Up` 인지 확인
+- 처음엔 리더 선출에 1~2분 걸림
 
-### 메모리 부족
+### Topic 생성 "already exists"
+- 이름 중복. Topic List 에서 기존 것 확인/삭제 후 재시도
+
+### Broker 메모리 부족으로 재시작
 - Docker Desktop 메모리 할당 늘리기 (Settings → Resources)
-- 또는 docker-compose.yml 에서 broker 수 줄이기
 
-### Kafka UI에서 Cluster 안 보임
-- 모든 Broker 가 `Up` 상태인지 확인
-- `docker compose restart kafka-ui`
-
-## 학습용 변형 아이디어
-
-- `replicationFactor` 를 1 로 바꿔보고 Broker 1대 죽였을 때 비교
-- `numPartitions` 를 10 으로 늘려서 분산 효과 확인
-- Consumer Group 에 Consumer 인스턴스 추가해서 파티션 재할당(Rebalance) 관찰
-- `docker compose stop kafka-1` 으로 Leader 이전 관찰 (Kafka UI 에서)
+### Replication Factor 에러
+- Broker 수(6)를 초과할 수 없음
+- 예: `Replication factor: 7 larger than available brokers: 6`
