@@ -8,6 +8,7 @@ interface Props {
   topics: TopicMeta[];
   controller: number;
   highlightedTopic: string | null;
+  onPartitionClick?: (topic: string, partition: number) => void;
 }
 
 interface PartitionAssignment {
@@ -21,6 +22,7 @@ export default function BrokerGrid({
   topics,
   controller,
   highlightedTopic,
+  onPartitionClick,
 }: Props) {
   const byBroker = new Map<number, PartitionAssignment[]>();
   for (const b of brokers) byBroker.set(b.id, []);
@@ -129,20 +131,25 @@ export default function BrokerGrid({
                           {parts
                             .sort((a, b) => a.partition - b.partition)
                             .map((p) => (
-                              <span
+                              <button
                                 key={p.partition}
-                                className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onPartitionClick?.(topicName, p.partition);
+                                }}
+                                className={`text-[9px] px-1 py-0.5 rounded font-mono cursor-pointer transition hover:brightness-125 hover:ring-1 hover:ring-white/40 ${
                                   p.role === "L"
                                     ? "bg-black/40 text-white border border-white/20"
-                                    : "bg-black/20 text-zinc-300"
+                                    : "bg-black/20 text-zinc-300 border border-transparent"
                                 }`}
-                                title={`Partition ${p.partition} - ${
+                                title={`클릭: Partition ${p.partition} 메시지 보기 (${
                                   p.role === "L" ? "Leader" : "Follower"
-                                }`}
+                                })`}
                               >
                                 P{p.partition}
                                 {p.role === "L" ? "★" : ""}
-                              </span>
+                              </button>
                             ))}
                         </div>
                       </div>

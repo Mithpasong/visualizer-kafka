@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import CreateTopicForm from "./CreateTopicForm";
 import TopicList from "./TopicList";
 import BrokerGrid from "./BrokerGrid";
+import CalcProducer from "./CalcProducer";
+import CalcResults from "./CalcResults";
+import PartitionViewer from "./PartitionViewer";
 
 export interface PartitionMeta {
   partition: number;
@@ -40,6 +43,10 @@ export default function Dashboard() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [highlightedTopic, setHighlightedTopic] = useState<string | null>(null);
   const [showInternal, setShowInternal] = useState(false);
+  const [viewer, setViewer] = useState<{
+    topic: string;
+    partition: number;
+  } | null>(null);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -202,9 +209,36 @@ export default function Dashboard() {
             topics={topics}
             controller={controller}
             highlightedTopic={highlightedTopic}
+            onPartitionClick={(topic, partition) =>
+              setViewer({ topic, partition })
+            }
           />
         </section>
+
+        <section className="col-span-12 lg:col-span-4">
+          <CalcProducer
+            topics={topics}
+            onPublished={(info) => {
+              pushNotice({
+                type: "success",
+                message: `✓ "${info.topic}" P${info.partition} / off ${info.offset} 에 발행됨`,
+              });
+            }}
+            onError={(msg) => pushNotice({ type: "error", message: msg })}
+          />
+        </section>
+        <section className="col-span-12 lg:col-span-8">
+          <CalcResults />
+        </section>
       </div>
+
+      {viewer && (
+        <PartitionViewer
+          topic={viewer.topic}
+          partition={viewer.partition}
+          onClose={() => setViewer(null)}
+        />
+      )}
 
       <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50">
         {notices.map((n) => (
@@ -225,7 +259,7 @@ export default function Dashboard() {
 
       <footer className="mt-8 text-xs text-zinc-500 text-center">
         bootstrap: <code className="text-zinc-400">localhost:9092,...,9592</code>{" "}
-        · 1.5초마다 폴링
+        · 1.5초마다 폴링 · 파티션 블록 클릭 → 저장된 메시지 보기
       </footer>
     </main>
   );
