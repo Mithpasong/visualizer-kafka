@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useT } from "./I18nProvider";
 
 export interface CalcResultItem {
   id: string;
@@ -20,17 +21,20 @@ const OP_LABEL: Record<string, string> = {
   "/": "÷",
 };
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 2000) return "방금";
-  if (diff < 60000) return `${Math.floor(diff / 1000)}초 전`;
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}분 전`;
-  return `${Math.floor(diff / 3600000)}시간 전`;
-}
-
 export default function CalcResults() {
+  const { t } = useT();
   const [results, setResults] = useState<CalcResultItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const timeAgo = (iso: string): string => {
+    const diff = Date.now() - new Date(iso).getTime();
+    if (diff < 2000) return t("calcResults.ago.justNow");
+    if (diff < 60000)
+      return t("calcResults.ago.seconds", { n: Math.floor(diff / 1000) });
+    if (diff < 3600000)
+      return t("calcResults.ago.minutes", { n: Math.floor(diff / 60000) });
+    return t("calcResults.ago.hours", { n: Math.floor(diff / 3600000) });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -66,10 +70,10 @@ export default function CalcResults() {
         </div>
         <div>
           <h2 className="text-sm font-semibold text-white">
-            Consumer · 계산 결과
+            {t("calcResults.title")}
           </h2>
           <p className="text-xs text-zinc-500">
-            수신된 메시지 중 계산 포맷에 맞는 것만 처리 ({results.length}건)
+            {t("calcResults.subtitle", { count: results.length })}
           </p>
         </div>
       </div>
@@ -83,9 +87,9 @@ export default function CalcResults() {
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1 scroll-fade">
         {results.length === 0 && (
           <div className="text-xs text-zinc-600 italic text-center py-10 border border-dashed border-zinc-800 rounded-lg">
-            아직 수신된 계산 메시지가 없습니다.
+            {t("calcResults.empty")}
             <br />
-            왼쪽에서 메시지를 발행해보세요.
+            {t("calcResults.emptyHint")}
           </div>
         )}
         {results.map((r) => (

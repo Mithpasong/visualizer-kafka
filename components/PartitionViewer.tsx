@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useT } from "./I18nProvider";
 
 interface PartitionMessageItem {
   partition: number;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function PartitionViewer({ topic, partition, onClose }: Props) {
+  const { t } = useT();
   const [messages, setMessages] = useState<PartitionMessageItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export default function PartitionViewer({ topic, partition, onClose }: Props) {
               <span className="font-mono text-orange-300">{partition}</span>
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              이 파티션에 저장된 메시지 ({messages.length}건)
+              {t("viewer.subtitle", { count: messages.length })}
             </p>
           </div>
           <button
@@ -90,7 +92,7 @@ export default function PartitionViewer({ topic, partition, onClose }: Props) {
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {loading && (
             <div className="text-xs text-zinc-500 text-center py-10">
-              로딩 중...
+              {t("viewer.loading")}
             </div>
           )}
           {error && (
@@ -100,9 +102,9 @@ export default function PartitionViewer({ topic, partition, onClose }: Props) {
           )}
           {!loading && messages.length === 0 && !error && (
             <div className="text-xs text-zinc-600 italic text-center py-10 border border-dashed border-zinc-800 rounded-lg">
-              이 파티션에 저장된 메시지가 없습니다.
+              {t("viewer.empty")}
               <br />
-              (서버 시작 후 이 토픽으로 발행된 메시지만 표시됩니다)
+              {t("viewer.emptyHint")}
             </div>
           )}
           {messages.map((m) => (
@@ -112,9 +114,9 @@ export default function PartitionViewer({ topic, partition, onClose }: Props) {
             >
               <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-1.5 font-mono">
                 <span>
-                  offset{" "}
+                  {t("viewer.offsetPrefix")}{" "}
                   <span className="text-orange-300 font-bold">{m.offset}</span>
-                  {m.key ? ` · key=${m.key}` : " · (no key)"}
+                  {m.key ? ` · key=${m.key}` : t("viewer.noKey")}
                 </span>
                 <span>{new Date(m.consumedAt).toLocaleTimeString()}</span>
               </div>
@@ -128,7 +130,7 @@ export default function PartitionViewer({ topic, partition, onClose }: Props) {
         </div>
 
         <footer className="p-3 border-t border-zinc-800 text-[10px] text-zinc-500 text-center">
-          1.5초마다 자동 새로고침 · ESC 또는 바깥 클릭으로 닫기
+          {t("viewer.footer")}
         </footer>
       </div>
     </div>

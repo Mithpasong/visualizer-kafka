@@ -2,6 +2,7 @@
 
 import type { TopicMeta } from "./Dashboard";
 import { FALLBACK_COLOR, type TopicColor } from "@/lib/colors";
+import { useT } from "./I18nProvider";
 
 interface Props {
   topics: TopicMeta[];
@@ -20,6 +21,7 @@ export default function TopicList({
   onToggleInternal,
   topicColors,
 }: Props) {
+  const { t } = useT();
   const userTopics = topics.filter((t) => !t.isInternal);
   const internalTopics = topics.filter((t) => t.isInternal);
   const totalUnderReplicated = topics.reduce(
@@ -38,15 +40,17 @@ export default function TopicList({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">
-              Topic 목록 · {userTopics.length}개
+              {t("topicList.title", { count: userTopics.length })}
             </h2>
             <p className="text-xs text-zinc-500">
               {totalUnderReplicated > 0 && (
                 <span className="text-amber-400">
-                  ⚠ Under-replicated 파티션 {totalUnderReplicated}개 ·{" "}
+                  {t("topicList.subtitleUnderReplicated", {
+                    count: totalUnderReplicated,
+                  })}
                 </span>
               )}
-              실시간 폴링
+              {t("topicList.subtitlePolling")}
             </p>
           </div>
         </div>
@@ -57,16 +61,16 @@ export default function TopicList({
             onChange={onToggleInternal}
             className="accent-sky-500"
           />
-          시스템 토픽 표시 ({internalTopics.length})
+          {t("topicList.showInternal", { count: internalTopics.length })}
         </label>
       </div>
 
       <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1 scroll-fade">
         {userTopics.length === 0 && !showInternal && (
           <div className="text-xs text-zinc-600 italic text-center py-10 border border-dashed border-zinc-800 rounded-lg">
-            아직 생성된 Topic이 없습니다.
+            {t("topicList.empty")}
             <br />
-            왼쪽에서 새 Topic을 만들어 보세요
+            {t("topicList.emptyHint")}
           </div>
         )}
 
@@ -101,12 +105,12 @@ export default function TopicList({
                   </span>
                   {isHighlighted && (
                     <span className="text-[9px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.5 rounded-full animate-pulse">
-                      NEW
+                      {t("topicList.newBadge")}
                     </span>
                   )}
                   {topic.isInternal && (
                     <span className="text-[9px] bg-zinc-800 text-zinc-500 border border-zinc-700 px-1.5 py-0.5 rounded">
-                      SYSTEM
+                      {t("topicList.systemBadge")}
                     </span>
                   )}
                 </div>
@@ -137,7 +141,7 @@ export default function TopicList({
                       onClick={() => onDelete(topic.name)}
                       className="text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 px-2 py-0.5 rounded border border-red-500/30 hover:border-red-500/50 transition"
                     >
-                      삭제
+                      {t("topicList.deleteBtn")}
                     </button>
                   )}
                 </div>

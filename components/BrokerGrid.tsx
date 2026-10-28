@@ -2,6 +2,7 @@
 
 import type { BrokerMeta, TopicMeta } from "./Dashboard";
 import { FALLBACK_COLOR, type TopicColor } from "@/lib/colors";
+import { useT } from "./I18nProvider";
 
 interface Props {
   brokers: BrokerMeta[];
@@ -26,6 +27,7 @@ export default function BrokerGrid({
   onPartitionClick,
   topicColors,
 }: Props) {
+  const { t } = useT();
   const byBroker = new Map<number, PartitionAssignment[]>();
   for (const b of brokers) byBroker.set(b.id, []);
   for (const t of topics) {
@@ -51,17 +53,16 @@ export default function BrokerGrid({
           </div>
           <div>
             <h2 className="text-sm font-semibold text-white">
-              Kafka Cluster · Broker {brokers.length}대
+              {t("brokerGrid.title", { count: brokers.length })}
             </h2>
-            <p className="text-xs text-zinc-500">
-              Topic 파티션이 Broker에 어떻게 분산됐는지 (★=Leader, ·=Follower)
-            </p>
+            <p className="text-xs text-zinc-500">{t("brokerGrid.subtitle")}</p>
           </div>
         </div>
         <div className="text-xs text-zinc-500">
-          Controller:{" "}
+          {t("brokerGrid.controller")}{" "}
           <span className="text-amber-400 font-mono">
-            Broker {controller >= 0 ? controller : "?"}
+            {t("brokerGrid.controllerBrokerPrefix")}{" "}
+            {controller >= 0 ? controller : "?"}
           </span>
         </div>
       </div>
@@ -106,7 +107,7 @@ export default function BrokerGrid({
                 <div className="space-y-1.5">
                   {assignments.length === 0 && (
                     <div className="text-[11px] text-zinc-600 italic text-center py-4">
-                      (저장된 파티션 없음)
+                      {t("brokerGrid.noPartitions")}
                     </div>
                   )}
                   {Array.from(byTopic.entries()).map(([topicName, parts]) => {
@@ -154,9 +155,13 @@ export default function BrokerGrid({
                                     ? "bg-black/40 text-white border border-white/20"
                                     : "bg-black/20 text-zinc-300 border border-transparent"
                                 }`}
-                                title={`클릭: Partition ${p.partition} 메시지 보기 (${
-                                  p.role === "L" ? "Leader" : "Follower"
-                                })`}
+                                title={t("brokerGrid.partitionTooltip", {
+                                  p: p.partition,
+                                  role:
+                                    p.role === "L"
+                                      ? t("brokerGrid.legendLeader")
+                                      : t("brokerGrid.legendFollower"),
+                                })}
                               >
                                 P{p.partition}
                                 {p.role === "L" ? "★" : ""}
@@ -169,15 +174,10 @@ export default function BrokerGrid({
                 </div>
 
                 <div className="mt-2 pt-2 border-t border-zinc-800 text-[10px] text-zinc-500">
-                  총{" "}
-                  <span className="text-white font-mono">
-                    {assignments.length}
-                  </span>
-                  개 복제본 ·{" "}
-                  <span className="text-orange-300 font-mono">
-                    {assignments.filter((a) => a.role === "L").length}
-                  </span>
-                  개 Leader
+                  {t("brokerGrid.totalReplicas", {
+                    replicas: assignments.length,
+                    leaders: assignments.filter((a) => a.role === "L").length,
+                  })}
                 </div>
               </div>
             );
@@ -189,19 +189,19 @@ export default function BrokerGrid({
           <span className="text-white font-mono bg-black/40 border border-white/20 px-1 rounded">
             P0★
           </span>
-          Leader
+          {t("brokerGrid.legendLeader")}
         </span>
         <span className="flex items-center gap-1">
           <span className="text-zinc-300 font-mono bg-black/20 px-1 rounded">
             P1
           </span>
-          Follower
+          {t("brokerGrid.legendFollower")}
         </span>
         <span className="flex items-center gap-1 ml-auto">
           <span className="text-amber-300 font-mono text-[9px] bg-amber-500/30 border border-amber-500/50 px-1 rounded">
             CTRL
           </span>
-          Controller Broker
+          {t("brokerGrid.legendController")}
         </span>
       </div>
     </div>
