@@ -212,6 +212,25 @@ export async function listTopicsWithMetadata(
   });
 }
 
+const TRANSIENT_ERROR_HINTS = [
+  'does not host',
+  'not leader',
+  'leader_not_available',
+  'leadernotavailable',
+  'metadata',
+  'not available',
+  'unknown topic',
+];
+
+function isTransientError(err: any): boolean {
+  const msg = (err?.message || String(err)).toLowerCase();
+  return TRANSIENT_ERROR_HINTS.some((hint) => msg.includes(hint));
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function createTopic(
   name: string,
   numPartitions: number,
@@ -231,37 +250,50 @@ export async function createTopic(
       throw new Error(`Topic "${name}" 이미 존재합니다`);
     }
 
-    try {
-      const ok = await admin.createTopics({
-        validateOnly: false,
-        waitForLeaders: true,
-        timeout: 30000,
-        topics: [
-          {
-            topic: name,
-            numPartitions,
-            replicationFactor,
-          },
-        ],
-      });
-      if (!ok) {
-        throw new Error(
-          `Kafka 가 토픽 생성을 거부했습니다 (이미 존재하거나 설정 문제)`
-        );
+    const MAX_ATTEMPTS = 3;
+    let lastErr: any = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const ok = await admin.createTopics({
+          validateOnly: false,
+          waitForLeaders: true,
+          timeout: 30000,
+          topics: [
+            {
+              topic: name,
+              numPartitions,
+              replicationFactor,
+            },
+          ],
+        });
+        if (!ok) {
+          throw new Error(
+            `Kafka 가 토픽 생성을 거부했습니다 (이미 존재하거나 설정 문제)`
+          );
+        }
+        return { name, numPartitions, replicationFactor };
+      } catch (err: any) {
+        lastErr = err;
+        if (attempt < MAX_ATTEMPTS && isTransientError(err)) {
+          console.warn(
+            `[kafka] createTopic transient error on attempt ${attempt}: ${err?.message}. retrying in 500ms...`
+          );
+          await sleep(500);
+          continue;
+        }
+        break;
       }
-    } catch (err: any) {
-      const inner = err?.message || String(err);
-      const errorsField = err?.errors
-        ? ` | errors: ${JSON.stringify(err.errors)}`
-        : '';
-      const topicErrors = err?.topicErrors
-        ? ` | topicErrors: ${JSON.stringify(err.topicErrors)}`
-        : '';
-      console.error('[kafka] createTopic failed', err);
-      throw new Error(`${inner}${errorsField}${topicErrors}`);
     }
 
-    return { name, numPartitions, replicationFactor };
+    const inner = lastErr?.message || String(lastErr);
+    const errorsField = lastErr?.errors
+      ? ` | errors: ${JSON.stringify(lastErr.errors)}`
+      : '';
+    const topicErrors = lastErr?.topicErrors
+      ? ` | topicErrors: ${JSON.stringify(lastErr.topicErrors)}`
+      : '';
+    console.error('[kafka] createTopic failed (final)', lastErr);
+    throw new Error(`${inner}${errorsField}${topicErrors}`);
   });
 }
 
@@ -270,11 +302,33 @@ export async function deleteTopic(name: string) {
   if (state) {
     state.partitionMessages.delete(name);
     state.calcResults = state.calcResults.filter((r) => r.topic !== name);
+
+    if (state.consumer) {
+      try {
+        await state.consumer.disconnect();
+        console.log(
+          `[kafka] consumer disconnected before deleting topic "${name}"`
+        );
+      } catch (err) {
+        console.warn('[kafka] consumer disconnect warning', err);
+      }
+      state.consumer = null;
+      state.subscribedTopics.clear();
+    }
   }
-  return withAdmin(async (admin) => {
-    await admin.deleteTopics({ topics: [name] });
+
+  const result = await withAdmin(async (admin) => {
+    await admin.deleteTopics({ topics: [name], timeout: 30000 });
     return { name };
   });
+
+  setTimeout(() => {
+    refreshConsumer().catch((err) =>
+      console.error('[kafka] auto-refresh consumer after delete failed', err)
+    );
+  }, 2000);
+
+  return result;
 }
 
 export async function getBrokers(): Promise<{
