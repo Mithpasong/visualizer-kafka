@@ -516,6 +516,13 @@ export async function publishCalc(
   input: CalcInput,
   key?: string
 ) {
+  const existing = await withAdmin((admin) => admin.listTopics());
+  if (!existing.includes(topic)) {
+    throw new Error(
+      `Topic "${topic}" 가 존재하지 않습니다 (삭제됐을 수 있음). 다른 토픽을 선택하거나 새로 생성하세요.`
+    );
+  }
+
   const producer = await getProducer();
   const payload = {
     id: `calc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -523,16 +530,41 @@ export async function publishCalc(
     operator: input.operator,
     createdAt: new Date().toISOString(),
   };
-  const result = await producer.send({
-    topic,
-    acks: -1,
-    messages: [
-      {
-        key: key && key.length > 0 ? key : null,
-        value: JSON.stringify(payload),
-      },
-    ],
-  });
+
+  const MAX_ATTEMPTS = 3;
+  let lastErr: any = null;
+  let result: any = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      result = await producer.send({
+        topic,
+        acks: -1,
+        messages: [
+          {
+            key: key && key.length > 0 ? key : null,
+            value: JSON.stringify(payload),
+          },
+        ],
+      });
+      break;
+    } catch (err: any) {
+      lastErr = err;
+      if (attempt < MAX_ATTEMPTS && isTransientError(err)) {
+        console.warn(
+          `[kafka] publishCalc transient error on attempt ${attempt}: ${err?.message}. retrying in 500ms...`
+        );
+        await sleep(500);
+        continue;
+      }
+      break;
+    }
+  }
+
+  if (!result) {
+    console.error('[kafka] publishCalc failed (final)', lastErr);
+    throw new Error(lastErr?.message || String(lastErr));
+  }
+
   await ensureConsumer();
   const meta = result[0];
   return {
