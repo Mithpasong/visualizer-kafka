@@ -67,6 +67,7 @@ const en: Dict = {
   "brokerGrid.legendController": "Controller Broker",
   "brokerGrid.partitionTooltip":
     "Click: view messages in Partition {p} ({role})",
+  "brokerGrid.justCreated": "Just created here",
 
   "calcProducer.title": "Producer · Publish calculation",
   "calcProducer.subtitle":
@@ -176,6 +177,7 @@ const ko: Dict = {
   "brokerGrid.legendController": "Controller Broker",
   "brokerGrid.partitionTooltip":
     "클릭: Partition {p} 메시지 보기 ({role})",
+  "brokerGrid.justCreated": "여기에 방금 작업하신 것이 생겼습니다",
 
   "calcProducer.title": "Producer · 계산 메시지 발행",
   "calcProducer.subtitle":

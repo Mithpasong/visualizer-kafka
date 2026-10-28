@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [highlightedTopic, setHighlightedTopic] = useState<string | null>(null);
+  const [justCreatedTopic, setJustCreatedTopic] = useState<string | null>(null);
   const [showInternal, setShowInternal] = useState(false);
   const [viewer, setViewer] = useState<{
     topic: string;
@@ -116,6 +117,8 @@ export default function Dashboard() {
         });
         setHighlightedTopic(name);
         setTimeout(() => setHighlightedTopic(null), 5000);
+        setJustCreatedTopic(name);
+        setTimeout(() => setJustCreatedTopic(null), 1500);
         fetchAll();
         return true;
       } catch (err: any) {
@@ -284,6 +287,7 @@ export default function Dashboard() {
             topics={topics}
             controller={controller}
             highlightedTopic={highlightedTopic}
+            justCreatedTopic={justCreatedTopic}
             onPartitionClick={(topic, partition) =>
               setViewer({ topic, partition })
             }
