@@ -1,7 +1,7 @@
 "use client";
 
 import type { BrokerMeta, TopicMeta } from "./Dashboard";
-import { colorForTopic } from "@/lib/colors";
+import { FALLBACK_COLOR, type TopicColor } from "@/lib/colors";
 
 interface Props {
   brokers: BrokerMeta[];
@@ -9,6 +9,7 @@ interface Props {
   controller: number;
   highlightedTopic: string | null;
   onPartitionClick?: (topic: string, partition: number) => void;
+  topicColors: Map<string, TopicColor>;
 }
 
 interface PartitionAssignment {
@@ -23,6 +24,7 @@ export default function BrokerGrid({
   controller,
   highlightedTopic,
   onPartitionClick,
+  topicColors,
 }: Props) {
   const byBroker = new Map<number, PartitionAssignment[]>();
   for (const b of brokers) byBroker.set(b.id, []);
@@ -108,7 +110,7 @@ export default function BrokerGrid({
                     </div>
                   )}
                   {Array.from(byTopic.entries()).map(([topicName, parts]) => {
-                    const color = colorForTopic(topicName);
+                    const color = topicColors.get(topicName) ?? FALLBACK_COLOR;
                     const isHighlighted = highlightedTopic === topicName;
                     return (
                       <div
@@ -116,13 +118,22 @@ export default function BrokerGrid({
                         className={`p-1.5 rounded border transition-all ${
                           isHighlighted
                             ? "bg-emerald-500/10 border-emerald-500/50 shadow-md shadow-emerald-500/20"
-                            : `${color.bg} ${color.border}`
+                            : ""
                         }`}
+                        style={
+                          isHighlighted
+                            ? undefined
+                            : {
+                                background: color.bg,
+                                borderColor: color.border,
+                              }
+                        }
                       >
                         <div
-                          className={`text-[10px] font-mono truncate mb-1 ${
-                            isHighlighted ? "text-emerald-200" : color.text
-                          }`}
+                          className="text-[10px] font-mono truncate mb-1"
+                          style={{
+                            color: isHighlighted ? "#a7f3d0" : color.text,
+                          }}
                           title={topicName}
                         >
                           {topicName}

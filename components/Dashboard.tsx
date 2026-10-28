@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CreateTopicForm from "./CreateTopicForm";
 import TopicList from "./TopicList";
 import BrokerGrid from "./BrokerGrid";
 import CalcProducer from "./CalcProducer";
 import CalcResults from "./CalcResults";
 import PartitionViewer from "./PartitionViewer";
+import { assignTopicColors } from "@/lib/colors";
 
 export interface PartitionMeta {
   partition: number;
@@ -136,6 +137,11 @@ export default function Dashboard() {
     [fetchAll, pushNotice]
   );
 
+  const topicColors = useMemo(
+    () => assignTopicColors(topics.filter((t) => !t.isInternal).map((t) => t.name)),
+    [topics]
+  );
+
   const connected = brokers.length > 0 && !error;
 
   return (
@@ -201,6 +207,7 @@ export default function Dashboard() {
             highlightedTopic={highlightedTopic}
             showInternal={showInternal}
             onToggleInternal={() => setShowInternal((v) => !v)}
+            topicColors={topicColors}
           />
         </section>
         <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
@@ -228,6 +235,7 @@ export default function Dashboard() {
             onPartitionClick={(topic, partition) =>
               setViewer({ topic, partition })
             }
+            topicColors={topicColors}
           />
         </section>
       </div>

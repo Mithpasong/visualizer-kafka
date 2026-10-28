@@ -1,7 +1,7 @@
 "use client";
 
 import type { TopicMeta } from "./Dashboard";
-import { colorForTopic } from "@/lib/colors";
+import { FALLBACK_COLOR, type TopicColor } from "@/lib/colors";
 
 interface Props {
   topics: TopicMeta[];
@@ -9,6 +9,7 @@ interface Props {
   highlightedTopic: string | null;
   showInternal: boolean;
   onToggleInternal: () => void;
+  topicColors: Map<string, TopicColor>;
 }
 
 export default function TopicList({
@@ -17,6 +18,7 @@ export default function TopicList({
   highlightedTopic,
   showInternal,
   onToggleInternal,
+  topicColors,
 }: Props) {
   const userTopics = topics.filter((t) => !t.isInternal);
   const internalTopics = topics.filter((t) => t.isInternal);
@@ -69,7 +71,7 @@ export default function TopicList({
         )}
 
         {topics.map((topic) => {
-          const color = colorForTopic(topic.name);
+          const color = topicColors.get(topic.name) ?? FALLBACK_COLOR;
           const isHighlighted = highlightedTopic === topic.name;
           const underReplicated = topic.partitions.filter(
             (p) => p.isr.length < topic.replicationFactor
@@ -87,7 +89,8 @@ export default function TopicList({
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <span
-                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color.dot}`}
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ background: color.dot }}
                   />
                   <span
                     className={`font-mono text-sm font-semibold truncate ${
@@ -144,7 +147,12 @@ export default function TopicList({
                 {topic.partitions.map((p) => (
                   <div
                     key={p.partition}
-                    className={`text-[10px] px-1.5 py-0.5 rounded font-mono border ${color.bg} ${color.border} ${color.text}`}
+                    className="text-[10px] px-1.5 py-0.5 rounded font-mono border"
+                    style={{
+                      background: color.bg,
+                      borderColor: color.border,
+                      color: color.text,
+                    }}
                     title={`Partition ${p.partition}: Leader=Broker ${p.leader}, Replicas=[${p.replicas.join(",")}], ISR=[${p.isr.join(",")}]`}
                   >
                     P{p.partition}
