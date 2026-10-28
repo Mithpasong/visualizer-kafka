@@ -188,13 +188,13 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-12 gap-4">
-        <section className="col-span-12 lg:col-span-4">
+        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
           <CreateTopicForm
             onCreate={createTopic}
             maxBrokers={brokers.length || 6}
           />
         </section>
-        <section className="col-span-12 lg:col-span-8">
+        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
           <TopicList
             topics={topics}
             onDelete={deleteTopic}
@@ -203,19 +203,7 @@ export default function Dashboard() {
             onToggleInternal={() => setShowInternal((v) => !v)}
           />
         </section>
-        <section className="col-span-12">
-          <BrokerGrid
-            brokers={brokers}
-            topics={topics}
-            controller={controller}
-            highlightedTopic={highlightedTopic}
-            onPartitionClick={(topic, partition) =>
-              setViewer({ topic, partition })
-            }
-          />
-        </section>
-
-        <section className="col-span-12 lg:col-span-4">
+        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
           <CalcProducer
             topics={topics}
             onPublished={(info) => {
@@ -227,8 +215,20 @@ export default function Dashboard() {
             onError={(msg) => pushNotice({ type: "error", message: msg })}
           />
         </section>
-        <section className="col-span-12 lg:col-span-8">
+        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
           <CalcResults />
+        </section>
+
+        <section className="col-span-12">
+          <BrokerGrid
+            brokers={brokers}
+            topics={topics}
+            controller={controller}
+            highlightedTopic={highlightedTopic}
+            onPartitionClick={(topic, partition) =>
+              setViewer({ topic, partition })
+            }
+          />
         </section>
       </div>
 
