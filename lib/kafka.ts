@@ -94,6 +94,15 @@ function getKafka(): Kafka {
       calcResults: [],
       consumerStarting: null,
     };
+  } else {
+    const s = globalForKafka.kafkaState as Partial<KafkaState> & { kafka: Kafka };
+    if (!Array.isArray(s.controllerHistory)) s.controllerHistory = [];
+    if (!('producer' in s)) s.producer = null;
+    if (!('consumer' in s)) s.consumer = null;
+    if (!(s.subscribedTopics instanceof Set)) s.subscribedTopics = new Set();
+    if (!(s.partitionMessages instanceof Map)) s.partitionMessages = new Map();
+    if (!Array.isArray(s.calcResults)) s.calcResults = [];
+    if (!('consumerStarting' in s)) s.consumerStarting = null;
   }
   return globalForKafka.kafkaState.kafka;
 }
@@ -443,15 +452,18 @@ export async function publishCalc(
 }
 
 export function getCalcResults(): CalcResult[] {
-  const state = globalForKafka.kafkaState;
-  return state?.calcResults ?? [];
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+  return state.calcResults ?? [];
 }
 
 export function getPartitionMessages(
   topic: string,
   partition: number
 ): PartitionMessage[] {
-  const state = globalForKafka.kafkaState;
-  const list = state?.partitionMessages.get(topic)?.get(partition) ?? [];
-  return list;
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+  const topicMap = state.partitionMessages?.get(topic);
+  if (!topicMap) return [];
+  return topicMap.get(partition) ?? [];
 }
