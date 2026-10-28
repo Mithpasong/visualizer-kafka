@@ -118,6 +118,11 @@ const en: Dict = {
     "Auto-refresh every 1.5s · ESC or outside click to close",
 
   "lang.switch.label": "Language",
+
+  "overlay.creating": "Creating topic \"{name}\"...",
+  "overlay.deleting": "Deleting topic \"{name}\"...",
+  "overlay.pleaseWait":
+    "This may take a few seconds. Please wait until it completes.",
 };
 
 const ko: Dict = {
@@ -230,6 +235,11 @@ const ko: Dict = {
     "1.5초마다 자동 새로고침 · ESC 또는 바깥 클릭으로 닫기",
 
   "lang.switch.label": "언어",
+
+  "overlay.creating": "토픽 \"{name}\" 생성 중...",
+  "overlay.deleting": "토픽 \"{name}\" 삭제 중...",
+  "overlay.pleaseWait":
+    "완전히 완료될 때까지 잠시만 기다려 주세요.",
 };
 
 const DICTS: Record<Locale, Dict> = { en, ko };
