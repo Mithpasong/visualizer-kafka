@@ -10,6 +10,7 @@ interface Props {
   controller: number;
   highlightedTopic: string | null;
   justCreatedTopic?: string | null;
+  justPublishedPartition?: { topic: string; partition: number } | null;
   onPartitionClick?: (topic: string, partition: number) => void;
   topicColors: Map<string, TopicColor>;
 }
@@ -26,6 +27,7 @@ export default function BrokerGrid({
   controller,
   highlightedTopic,
   justCreatedTopic,
+  justPublishedPartition,
   onPartitionClick,
   topicColors,
 }: Props) {
@@ -147,6 +149,11 @@ export default function BrokerGrid({
                             .map((p) => {
                               const isJustCreated =
                                 justCreatedTopic === topicName;
+                              const isJustPublished =
+                                p.role === "L" &&
+                                justPublishedPartition?.topic === topicName &&
+                                justPublishedPartition?.partition ===
+                                  p.partition;
                               return (
                                 <div
                                   key={p.partition}
@@ -162,7 +169,9 @@ export default function BrokerGrid({
                                       );
                                     }}
                                     className={`text-[9px] px-1 py-0.5 rounded font-mono cursor-pointer transition hover:brightness-125 hover:ring-1 hover:ring-white/40 ${
-                                      isJustCreated
+                                      isJustPublished
+                                        ? "border-2 border-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.7)] bg-amber-500/30 text-white animate-jump-big"
+                                        : isJustCreated
                                         ? "border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)] bg-red-500/20 text-white animate-jump-attn"
                                         : p.role === "L"
                                         ? "bg-black/40 text-white border border-white/20"
@@ -179,7 +188,18 @@ export default function BrokerGrid({
                                     P{p.partition}
                                     {p.role === "L" ? "★" : ""}
                                   </button>
-                                  {isJustCreated && (
+                                  {isJustPublished && (
+                                    <div
+                                      className="absolute left-1/2 bottom-full mb-1 z-40 pointer-events-none whitespace-nowrap bg-amber-500 text-black text-[10px] font-semibold px-2 py-1 rounded shadow-lg animate-tooltip-pop"
+                                      style={{
+                                        transform: "translate(-50%, -8px)",
+                                      }}
+                                    >
+                                      {t("brokerGrid.justPublished")}
+                                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-amber-500" />
+                                    </div>
+                                  )}
+                                  {isJustCreated && !isJustPublished && (
                                     <div
                                       className="absolute left-1/2 bottom-full mb-1 z-30 pointer-events-none whitespace-nowrap bg-red-500 text-white text-[10px] font-semibold px-2 py-1 rounded shadow-lg animate-tooltip-pop"
                                       style={{
