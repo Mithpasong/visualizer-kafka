@@ -8,6 +8,7 @@ import CalcProducer from "./CalcProducer";
 import CalcResults from "./CalcResults";
 import PartitionViewer from "./PartitionViewer";
 import LanguageSwitcher from "./LanguageSwitcher";
+import LoadingOverlay from "./LoadingOverlay";
 import { assignTopicColors } from "@/lib/colors";
 import { useT } from "./I18nProvider";
 
@@ -53,6 +54,9 @@ export default function Dashboard() {
     nonce: number;
   } | null>(null);
   const [showInternal, setShowInternal] = useState(false);
+  const [pendingOp, setPendingOp] = useState<
+    { kind: "create" | "delete"; name: string } | null
+  >(null);
   const [viewer, setViewer] = useState<{
     topic: string;
     partition: number;
@@ -98,6 +102,7 @@ export default function Dashboard() {
 
   const createTopic = useCallback(
     async (name: string, numPartitions: number, replicationFactor: number) => {
+      setPendingOp({ kind: "create", name });
       try {
         const res = await fetch("/api/topics", {
           method: "POST",
@@ -124,11 +129,13 @@ export default function Dashboard() {
         setTimeout(() => setHighlightedTopic(null), 5000);
         setJustCreatedTopic(name);
         setTimeout(() => setJustCreatedTopic(null), 1500);
-        fetchAll();
+        await fetchAll();
         return true;
       } catch (err: any) {
         pushNotice({ type: "error", message: err?.message ?? String(err) });
         return false;
+      } finally {
+        setPendingOp(null);
       }
     },
     [fetchAll, pushNotice, t]
@@ -137,6 +144,7 @@ export default function Dashboard() {
   const deleteTopic = useCallback(
     async (name: string) => {
       if (!confirm(t("topicList.confirmDelete", { name }))) return;
+      setPendingOp({ kind: "delete", name });
       try {
         const res = await fetch(`/api/topics/${encodeURIComponent(name)}`, {
           method: "DELETE",
@@ -153,9 +161,11 @@ export default function Dashboard() {
           type: "info",
           message: t("topicList.noticeDeleted", { name }),
         });
-        fetchAll();
+        await fetchAll();
       } catch (err: any) {
         pushNotice({ type: "error", message: err?.message ?? String(err) });
+      } finally {
+        setPendingOp(null);
       }
     },
     [fetchAll, pushNotice, t]
@@ -327,6 +337,8 @@ export default function Dashboard() {
           onClose={() => setViewer(null)}
         />
       )}
+
+      <LoadingOverlay op={pendingOp} />
 
       <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50">
         {notices.map((n) => (
