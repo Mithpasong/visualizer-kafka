@@ -267,6 +267,10 @@ export async function createTopic(
           ],
         });
         if (!ok) {
+          // 이전 시도에서 이미 생성됐고 리더 대기 단계에서만 실패한 경우
+          if (attempt > 1 && (await admin.listTopics()).includes(name)) {
+            return { name, numPartitions, replicationFactor };
+          }
           throw new Error(
             `Kafka 가 토픽 생성을 거부했습니다 (이미 존재하거나 설정 문제)`
           );
