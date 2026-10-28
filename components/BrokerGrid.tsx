@@ -9,6 +9,7 @@ interface Props {
   topics: TopicMeta[];
   controller: number;
   highlightedTopic: string | null;
+  justCreatedTopic?: string | null;
   onPartitionClick?: (topic: string, partition: number) => void;
   topicColors: Map<string, TopicColor>;
 }
@@ -24,6 +25,7 @@ export default function BrokerGrid({
   topics,
   controller,
   highlightedTopic,
+  justCreatedTopic,
   onPartitionClick,
   topicColors,
 }: Props) {
@@ -142,31 +144,55 @@ export default function BrokerGrid({
                         <div className="flex flex-wrap gap-0.5">
                           {parts
                             .sort((a, b) => a.partition - b.partition)
-                            .map((p) => (
-                              <button
-                                key={p.partition}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onPartitionClick?.(topicName, p.partition);
-                                }}
-                                className={`text-[9px] px-1 py-0.5 rounded font-mono cursor-pointer transition hover:brightness-125 hover:ring-1 hover:ring-white/40 ${
-                                  p.role === "L"
-                                    ? "bg-black/40 text-white border border-white/20"
-                                    : "bg-black/20 text-zinc-300 border border-transparent"
-                                }`}
-                                title={t("brokerGrid.partitionTooltip", {
-                                  p: p.partition,
-                                  role:
-                                    p.role === "L"
-                                      ? t("brokerGrid.legendLeader")
-                                      : t("brokerGrid.legendFollower"),
-                                })}
-                              >
-                                P{p.partition}
-                                {p.role === "L" ? "★" : ""}
-                              </button>
-                            ))}
+                            .map((p) => {
+                              const isJustCreated =
+                                justCreatedTopic === topicName;
+                              return (
+                                <div
+                                  key={p.partition}
+                                  className="relative inline-block"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPartitionClick?.(
+                                        topicName,
+                                        p.partition
+                                      );
+                                    }}
+                                    className={`text-[9px] px-1 py-0.5 rounded font-mono cursor-pointer transition hover:brightness-125 hover:ring-1 hover:ring-white/40 ${
+                                      isJustCreated
+                                        ? "border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)] bg-red-500/20 text-white animate-jump-attn"
+                                        : p.role === "L"
+                                        ? "bg-black/40 text-white border border-white/20"
+                                        : "bg-black/20 text-zinc-300 border border-transparent"
+                                    }`}
+                                    title={t("brokerGrid.partitionTooltip", {
+                                      p: p.partition,
+                                      role:
+                                        p.role === "L"
+                                          ? t("brokerGrid.legendLeader")
+                                          : t("brokerGrid.legendFollower"),
+                                    })}
+                                  >
+                                    P{p.partition}
+                                    {p.role === "L" ? "★" : ""}
+                                  </button>
+                                  {isJustCreated && (
+                                    <div
+                                      className="absolute left-1/2 bottom-full mb-1 z-30 pointer-events-none whitespace-nowrap bg-red-500 text-white text-[10px] font-semibold px-2 py-1 rounded shadow-lg animate-tooltip-pop"
+                                      style={{
+                                        transform: "translate(-50%, -8px)",
+                                      }}
+                                    >
+                                      {t("brokerGrid.justCreated")}
+                                      <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-red-500" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                         </div>
                       </div>
                     );
