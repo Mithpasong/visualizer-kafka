@@ -93,7 +93,7 @@ export default function CalcProducer({ topics, onPublished, onError }: Props) {
   };
 
   return (
-    <div className="h-full bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+    <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
