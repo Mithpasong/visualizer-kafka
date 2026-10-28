@@ -7,7 +7,9 @@ import BrokerGrid from "./BrokerGrid";
 import CalcProducer from "./CalcProducer";
 import CalcResults from "./CalcResults";
 import PartitionViewer from "./PartitionViewer";
+import LanguageSwitcher from "./LanguageSwitcher";
 import { assignTopicColors } from "@/lib/colors";
+import { useT } from "./I18nProvider";
 
 export interface PartitionMeta {
   partition: number;
@@ -37,6 +39,7 @@ export interface Notice {
 }
 
 export default function Dashboard() {
+  const { t } = useT();
   const [topics, setTopics] = useState<TopicMeta[]>([]);
   const [brokers, setBrokers] = useState<BrokerMeta[]>([]);
   const [controller, setController] = useState<number>(-1);
@@ -97,12 +100,19 @@ export default function Dashboard() {
         });
         const data = await res.json();
         if (!data.success) {
-          pushNotice({ type: "error", message: `실패: ${data.error}` });
+          pushNotice({
+            type: "error",
+            message: t("createTopic.noticeFailed", { msg: data.error }),
+          });
           return false;
         }
         pushNotice({
           type: "success",
-          message: `✓ "${name}" 토픽 생성 (파티션 ${numPartitions}, RF ${replicationFactor})`,
+          message: t("createTopic.noticeCreated", {
+            name,
+            partitions: numPartitions,
+            rf: replicationFactor,
+          }),
         });
         setHighlightedTopic(name);
         setTimeout(() => setHighlightedTopic(null), 5000);
@@ -113,28 +123,34 @@ export default function Dashboard() {
         return false;
       }
     },
-    [fetchAll, pushNotice]
+    [fetchAll, pushNotice, t]
   );
 
   const deleteTopic = useCallback(
     async (name: string) => {
-      if (!confirm(`"${name}" 토픽을 정말 삭제할까요?`)) return;
+      if (!confirm(t("topicList.confirmDelete", { name }))) return;
       try {
         const res = await fetch(`/api/topics/${encodeURIComponent(name)}`, {
           method: "DELETE",
         });
         const data = await res.json();
         if (!data.success) {
-          pushNotice({ type: "error", message: `삭제 실패: ${data.error}` });
+          pushNotice({
+            type: "error",
+            message: t("topicList.noticeDeleteFailed", { msg: data.error }),
+          });
           return;
         }
-        pushNotice({ type: "info", message: `"${name}" 삭제됨` });
+        pushNotice({
+          type: "info",
+          message: t("topicList.noticeDeleted", { name }),
+        });
         fetchAll();
       } catch (err: any) {
         pushNotice({ type: "error", message: err?.message ?? String(err) });
       }
     },
-    [fetchAll, pushNotice]
+    [fetchAll, pushNotice, t]
   );
 
   const topicColors = useMemo(
@@ -166,14 +182,11 @@ export default function Dashboard() {
     <main className="min-h-screen p-6 max-w-[1800px] mx-auto">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">
-            Kafka Topic Manager
-          </h1>
-          <p className="text-sm text-zinc-400 mt-1">
-            Next.js에서 Kafka Topic 생성 · 삭제 · 클러스터 분산 시각화
-          </p>
+          <h1 className="text-3xl font-bold text-white">{t("app.title")}</h1>
+          <p className="text-sm text-zinc-400 mt-1">{t("app.subtitle")}</p>
         </div>
         <div className="flex items-center gap-3">
+          <LanguageSwitcher />
           <span
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
               connected
@@ -187,8 +200,8 @@ export default function Dashboard() {
               }`}
             />
             {connected
-              ? `Cluster 연결됨 (${brokers.length}대 Broker)`
-              : "Cluster 연결 끊김"}
+              ? t("status.connected", { count: brokers.length })
+              : t("status.disconnected")}
           </span>
           <a
             href="http://localhost:8080"
@@ -196,16 +209,16 @@ export default function Dashboard() {
             rel="noreferrer"
             className="text-xs px-3 py-1.5 rounded-full border border-zinc-700 hover:border-zinc-500 text-zinc-300"
           >
-            Kafka UI ↗
+            {t("status.kafkaUi")}
           </a>
         </div>
       </header>
 
       {error && (
         <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-300">
-          <strong>연결 실패:</strong> {error}
+          <strong>{t("error.connectionFailed")}</strong> {error}
           <div className="mt-1 text-xs text-red-400/80">
-            Kafka 클러스터가 실행 중인지 확인하세요:{" "}
+            {t("error.checkCluster")}
             <code>docker compose ps</code>
           </div>
         </div>
@@ -243,10 +256,19 @@ export default function Dashboard() {
             onPublished={(info) => {
               pushNotice({
                 type: "success",
-                message: `✓ "${info.topic}" P${info.partition} / off ${info.offset} 에 발행됨`,
+                message: t("calcProducer.noticePublished", {
+                  topic: info.topic,
+                  partition: info.partition,
+                  offset: info.offset,
+                }),
               });
             }}
-            onError={(msg) => pushNotice({ type: "error", message: msg })}
+            onError={(msg) =>
+              pushNotice({
+                type: "error",
+                message: t("calcProducer.noticeFailed", { msg }),
+              })
+            }
           />
         </section>
         <section
@@ -296,8 +318,7 @@ export default function Dashboard() {
       </div>
 
       <footer className="mt-8 text-xs text-zinc-500 text-center">
-        bootstrap: <code className="text-zinc-400">localhost:9092,...,9592</code>{" "}
-        · 1.5초마다 폴링 · 파티션 블록 클릭 → 저장된 메시지 보기
+        {t("footer.hint")}
       </footer>
     </main>
   );

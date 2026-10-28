@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "./I18nProvider";
 
 interface Props {
   onCreate: (
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function CreateTopicForm({ onCreate, maxBrokers }: Props) {
+  const { t } = useT();
   const [name, setName] = useState("");
   const [numPartitions, setNumPartitions] = useState(3);
   const [replicationFactor, setReplicationFactor] = useState(3);
@@ -37,35 +39,35 @@ export default function CreateTopicForm({ onCreate, maxBrokers }: Props) {
           +
         </div>
         <div>
-          <h2 className="text-sm font-semibold text-white">새 Topic 생성</h2>
-          <p className="text-xs text-zinc-500">
-            Admin API로 Kafka 클러스터에 Topic 추가
-          </p>
+          <h2 className="text-sm font-semibold text-white">
+            {t("createTopic.title")}
+          </h2>
+          <p className="text-xs text-zinc-500">{t("createTopic.subtitle")}</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs text-zinc-400 mb-1.5">
-            Topic 이름
+            {t("createTopic.nameLabel")}
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="예: user-events"
+            placeholder={t("createTopic.namePlaceholder")}
             pattern="[A-Za-z0-9._\-]+"
             className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 font-mono"
           />
           <p className="text-[10px] text-zinc-600 mt-1">
-            영문/숫자/._- 만 가능
+            {t("createTopic.nameHint")}
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-zinc-400 mb-1.5">
-              Partitions
+              {t("createTopic.partitionsLabel")}
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -89,7 +91,7 @@ export default function CreateTopicForm({ onCreate, maxBrokers }: Props) {
 
           <div>
             <label className="block text-xs text-zinc-400 mb-1.5">
-              Replication
+              {t("createTopic.replicationLabel")}
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -110,23 +112,21 @@ export default function CreateTopicForm({ onCreate, maxBrokers }: Props) {
               />
             </div>
             <p className="text-[10px] text-zinc-600 mt-1">
-              Broker {maxBrokers}대 → 최대 RF {maxBrokers}
+              {t("createTopic.replicationHint", { count: maxBrokers })}
             </p>
           </div>
         </div>
 
         <div className="p-3 bg-zinc-950/60 rounded-lg border border-zinc-800 text-xs text-zinc-400 space-y-1">
           <div>
-            총 Partition 복제본:{" "}
-            <span className="text-white font-mono">
-              {numPartitions * rfCapped}개
-            </span>
+            {t("createTopic.summaryReplicas", {
+              n: numPartitions * rfCapped,
+            })}
           </div>
           <div>
-            Broker당 평균:{" "}
-            <span className="text-white font-mono">
-              {Math.ceil((numPartitions * rfCapped) / Math.max(1, maxBrokers))}개
-            </span>
+            {t("createTopic.summaryPerBroker", {
+              n: Math.ceil((numPartitions * rfCapped) / Math.max(1, maxBrokers)),
+            })}
           </div>
         </div>
 
@@ -135,13 +135,13 @@ export default function CreateTopicForm({ onCreate, maxBrokers }: Props) {
           disabled={!name.trim() || submitting}
           className="w-full py-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-semibold text-sm transition"
         >
-          {submitting ? "생성 중..." : "Topic 생성 →"}
+          {submitting ? t("createTopic.submitting") : t("createTopic.submit")}
         </button>
       </form>
 
       <div className="mt-5 pt-4 border-t border-zinc-800 text-[10px] text-zinc-600 space-y-1">
-        <p>💡 생성 후 아래 Broker Grid 에서 파티션 분산이 즉시 보임</p>
-        <p>💡 Replication Factor &gt; 1 이면 복제본이 다른 Broker에 분산됨</p>
+        <p>{t("createTopic.tip1")}</p>
+        <p>{t("createTopic.tip2")}</p>
       </div>
     </div>
   );
