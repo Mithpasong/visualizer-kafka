@@ -11,6 +11,7 @@ const config: Config = {
         'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'slide-in': 'slide-in 0.4s ease-out',
         'jump-attn': 'jump-attn 0.7s ease-in-out',
+        'jump-big':  'jump-big 0.9s ease-in-out',
         'tooltip-pop': 'tooltip-pop 0.25s ease-out',
       },
       keyframes: {
@@ -23,6 +24,12 @@ const config: Config = {
           '30%':      { transform: 'translateY(-8px) scale(1.18)' },
           '60%':      { transform: 'translateY(2px)  scale(0.98)' },
           '80%':      { transform: 'translateY(0)    scale(1.05)' },
+        },
+        'jump-big': {
+          '0%, 100%': { transform: 'translateY(0)   scale(1)' },
+          '20%':      { transform: 'translateY(-14px) scale(1.35)' },
+          '50%':      { transform: 'translateY(2px)   scale(0.95)' },
+          '75%':      { transform: 'translateY(-4px)  scale(1.1)' },
         },
         'tooltip-pop': {
           '0%':   { transform: 'translate(-50%, -2px) scale(0.8)', opacity: '0' },

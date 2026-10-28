@@ -47,6 +47,11 @@ export default function Dashboard() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [highlightedTopic, setHighlightedTopic] = useState<string | null>(null);
   const [justCreatedTopic, setJustCreatedTopic] = useState<string | null>(null);
+  const [justPublishedPartition, setJustPublishedPartition] = useState<{
+    topic: string;
+    partition: number;
+    nonce: number;
+  } | null>(null);
   const [showInternal, setShowInternal] = useState(false);
   const [viewer, setViewer] = useState<{
     topic: string;
@@ -265,6 +270,17 @@ export default function Dashboard() {
                   offset: info.offset,
                 }),
               });
+              const nonce = Date.now();
+              setJustPublishedPartition({
+                topic: info.topic,
+                partition: info.partition,
+                nonce,
+              });
+              setTimeout(() => {
+                setJustPublishedPartition((prev) =>
+                  prev && prev.nonce === nonce ? null : prev
+                );
+              }, 2500);
             }}
             onError={(msg) =>
               pushNotice({
@@ -288,6 +304,14 @@ export default function Dashboard() {
             controller={controller}
             highlightedTopic={highlightedTopic}
             justCreatedTopic={justCreatedTopic}
+            justPublishedPartition={
+              justPublishedPartition
+                ? {
+                    topic: justPublishedPartition.topic,
+                    partition: justPublishedPartition.partition,
+                  }
+                : null
+            }
             onPartitionClick={(topic, partition) =>
               setViewer({ topic, partition })
             }
