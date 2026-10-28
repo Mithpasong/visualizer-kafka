@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TopicMeta } from "./Dashboard";
 import { useT } from "./I18nProvider";
 
@@ -33,9 +33,16 @@ export default function CalcProducer({ topics, onPublished, onError }: Props) {
   const [key, setKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (!topic && userTopics.length > 0) {
-    setTopic(userTopics[0].name);
-  }
+  useEffect(() => {
+    const names = userTopics.map((t) => t.name);
+    if (userTopics.length === 0) {
+      if (topic !== "") setTopic("");
+      return;
+    }
+    if (!topic || !names.includes(topic)) {
+      setTopic(userTopics[0].name);
+    }
+  }, [userTopics, topic]);
 
   const parseNumbers = (text: string): number[] | null => {
     const parts = text
