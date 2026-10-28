@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CreateTopicForm from "./CreateTopicForm";
 import TopicList from "./TopicList";
 import BrokerGrid from "./BrokerGrid";
@@ -142,6 +142,24 @@ export default function Dashboard() {
     [topics]
   );
 
+  const producerRef = useRef<HTMLDivElement>(null);
+  const [producerHeight, setProducerHeight] = useState<number | undefined>(
+    undefined
+  );
+
+  useEffect(() => {
+    const el = producerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const h = entry.contentRect.height;
+      if (h > 0) setProducerHeight(Math.round(h));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const matchedHeight = producerHeight ? { height: producerHeight } : undefined;
+
   const connected = brokers.length > 0 && !error;
 
   return (
@@ -193,14 +211,20 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-4">
-        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
+      <div className="grid grid-cols-12 gap-4 items-start">
+        <section
+          className="col-span-12 md:col-span-6 xl:col-span-3"
+          style={matchedHeight}
+        >
           <CreateTopicForm
             onCreate={createTopic}
             maxBrokers={brokers.length || 6}
           />
         </section>
-        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
+        <section
+          className="col-span-12 md:col-span-6 xl:col-span-3"
+          style={matchedHeight}
+        >
           <TopicList
             topics={topics}
             onDelete={deleteTopic}
@@ -210,7 +234,10 @@ export default function Dashboard() {
             topicColors={topicColors}
           />
         </section>
-        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
+        <section
+          ref={producerRef}
+          className="col-span-12 md:col-span-6 xl:col-span-3"
+        >
           <CalcProducer
             topics={topics}
             onPublished={(info) => {
@@ -222,7 +249,10 @@ export default function Dashboard() {
             onError={(msg) => pushNotice({ type: "error", message: msg })}
           />
         </section>
-        <section className="col-span-12 md:col-span-6 xl:col-span-3 h-[600px]">
+        <section
+          className="col-span-12 md:col-span-6 xl:col-span-3"
+          style={matchedHeight}
+        >
           <CalcResults />
         </section>
 
