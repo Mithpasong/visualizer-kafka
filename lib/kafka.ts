@@ -37,6 +37,7 @@ export interface BrokerMetadata {
 interface KafkaState {
   kafka: Kafka;
   initialized: boolean;
+  controllerHistory: number[];
 }
 
 const globalForKafka = globalThis as unknown as { kafkaState?: KafkaState };
@@ -49,9 +50,36 @@ function getKafka(): Kafka {
       logLevel: logLevel.ERROR,
       retry: { retries: 5, initialRetryTime: 300 },
     });
-    globalForKafka.kafkaState = { kafka, initialized: true };
+    globalForKafka.kafkaState = {
+      kafka,
+      initialized: true,
+      controllerHistory: [],
+    };
   }
   return globalForKafka.kafkaState.kafka;
+}
+
+const CONTROLLER_WINDOW = 7;
+
+function stabilizeController(rawController: number): number {
+  const state = globalForKafka.kafkaState!;
+  state.controllerHistory.push(rawController);
+  if (state.controllerHistory.length > CONTROLLER_WINDOW) {
+    state.controllerHistory.shift();
+  }
+  const counts = new Map<number, number>();
+  for (const id of state.controllerHistory) {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  let bestId = rawController;
+  let bestCount = -1;
+  for (const [id, c] of counts) {
+    if (c > bestCount) {
+      bestCount = c;
+      bestId = id;
+    }
+  }
+  return bestId;
 }
 
 async function withAdmin<T>(fn: (admin: Admin) => Promise<T>): Promise<T> {
@@ -162,13 +190,14 @@ export async function getBrokers(): Promise<{
 }> {
   return withAdmin(async (admin) => {
     const cluster = await admin.describeCluster();
+    const stable = stabilizeController(cluster.controller);
     return {
       brokers: cluster.brokers.map((b) => ({
         id: b.nodeId,
         host: b.host,
         port: b.port,
       })),
-      controller: cluster.controller,
+      controller: stable,
     };
   });
 }

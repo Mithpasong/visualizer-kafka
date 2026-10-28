@@ -78,7 +78,7 @@ export default function BrokerGrid({
             return (
               <div
                 key={broker.id}
-                className={`p-3 rounded-lg border bg-zinc-950/60 min-h-[160px] ${
+                className={`p-3 rounded-lg border bg-zinc-950/60 min-h-[160px] transition-colors duration-500 ${
                   isController
                     ? "border-amber-500/50"
                     : "border-zinc-800"
