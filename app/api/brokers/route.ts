@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getBrokers } from '@/lib/kafka';
+import { getAllBrokersWithStatus } from '@/lib/kafka';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const data = await getBrokers();
+    const data = await getAllBrokersWithStatus();
     return NextResponse.json({ success: true, ...data });
   } catch (err: any) {
     return NextResponse.json(

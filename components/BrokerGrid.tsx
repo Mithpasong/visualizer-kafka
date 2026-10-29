@@ -13,6 +13,8 @@ interface Props {
   justPublishedPartition?: { topic: string; partition: number } | null;
   onPartitionClick?: (topic: string, partition: number) => void;
   topicColors: Map<string, TopicColor>;
+  onBrokerAction?: (id: number, action: "stop" | "start") => void;
+  pendingBrokerAction?: { id: number; action: "stop" | "start" } | null;
 }
 
 interface PartitionAssignment {
@@ -30,6 +32,8 @@ export default function BrokerGrid({
   justPublishedPartition,
   onPartitionClick,
   topicColors,
+  onBrokerAction,
+  pendingBrokerAction,
 }: Props) {
   const { t } = useT();
   const byBroker = new Map<number, PartitionAssignment[]>();
@@ -75,8 +79,13 @@ export default function BrokerGrid({
         {brokers
           .sort((a, b) => a.id - b.id)
           .map((broker) => {
-            const assignments = byBroker.get(broker.id) ?? [];
-            const isController = broker.id === controller;
+            const assignments = broker.alive
+              ? byBroker.get(broker.id) ?? []
+              : [];
+            const isController = broker.id === controller && broker.alive;
+            const isDown = !broker.alive;
+            const isPending = pendingBrokerAction?.id === broker.id;
+            const pendingAction = pendingBrokerAction?.action;
 
             const byTopic = new Map<string, PartitionAssignment[]>();
             for (const a of assignments) {
@@ -87,19 +96,34 @@ export default function BrokerGrid({
             return (
               <div
                 key={broker.id}
-                className={`p-3 rounded-lg border bg-zinc-950/60 min-h-[160px] transition-colors duration-500 ${
-                  isController
-                    ? "border-amber-500/50"
-                    : "border-zinc-800"
+                className={`relative p-3 rounded-lg border min-h-[160px] transition-all duration-500 ${
+                  isDown
+                    ? "bg-zinc-950/40 border-red-500/30 opacity-70"
+                    : isController
+                    ? "bg-zinc-950/60 border-amber-500/50"
+                    : "bg-zinc-950/60 border-zinc-800"
                 }`}
               >
                 <div className="flex items-center justify-between mb-2 pb-2 border-b border-zinc-800">
-                  <div className="text-sm font-semibold text-white flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Broker {broker.id}
+                  <div className="text-sm font-semibold flex items-center gap-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isDown
+                          ? "bg-red-500"
+                          : "bg-emerald-400 animate-pulse"
+                      }`}
+                    />
+                    <span className={isDown ? "text-zinc-500" : "text-white"}>
+                      Broker {broker.id}
+                    </span>
                     {isController && (
                       <span className="text-[9px] bg-amber-500/30 text-amber-300 border border-amber-500/50 px-1 rounded">
                         CTRL
+                      </span>
+                    )}
+                    {isDown && (
+                      <span className="text-[9px] bg-red-500/30 text-red-300 border border-red-500/50 px-1 rounded">
+                        {t("brokerGrid.downBadge")}
                       </span>
                     )}
                   </div>
@@ -219,11 +243,43 @@ export default function BrokerGrid({
                   })}
                 </div>
 
-                <div className="mt-2 pt-2 border-t border-zinc-800 text-[10px] text-zinc-500">
-                  {t("brokerGrid.totalReplicas", {
-                    replicas: assignments.length,
-                    leaders: assignments.filter((a) => a.role === "L").length,
-                  })}
+                <div className="mt-2 pt-2 border-t border-zinc-800 flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-zinc-500">
+                    {isDown
+                      ? t("brokerGrid.statusDown")
+                      : t("brokerGrid.totalReplicas", {
+                          replicas: assignments.length,
+                          leaders: assignments.filter((a) => a.role === "L")
+                            .length,
+                        })}
+                  </span>
+                  {onBrokerAction && (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() =>
+                        onBrokerAction(broker.id, isDown ? "start" : "stop")
+                      }
+                      className={`text-[10px] px-2 py-0.5 rounded border font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isDown
+                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30"
+                          : "bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30"
+                      }`}
+                      title={
+                        isDown
+                          ? t("brokerGrid.startTooltip", { id: broker.id })
+                          : t("brokerGrid.stopTooltip", { id: broker.id })
+                      }
+                    >
+                      {isPending
+                        ? pendingAction === "stop"
+                          ? t("brokerGrid.stopping")
+                          : t("brokerGrid.starting")
+                        : isDown
+                        ? t("brokerGrid.startBtn")
+                        : t("brokerGrid.stopBtn")}
+                    </button>
+                  )}
                 </div>
               </div>
             );
