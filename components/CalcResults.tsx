@@ -28,6 +28,7 @@ export default function CalcResults() {
   const [savedRate, setSavedRate] = useState<number | null>(null);
   const [rateInput, setRateInput] = useState("0");
   const [savingRate, setSavingRate] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     fetch("/api/calc/consumer-config", { cache: "no-store" })
@@ -40,6 +41,26 @@ export default function CalcResults() {
       })
       .catch(() => {});
   }, []);
+
+  const clearResults = async () => {
+    if (results.length === 0) return;
+    if (!confirm(t("calcResults.confirmClear"))) return;
+    setClearing(true);
+    try {
+      const res = await fetch("/api/calc/consumed", { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setResults([]);
+        setError(null);
+      } else {
+        setError(data.error);
+      }
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const saveRate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,18 +123,29 @@ export default function CalcResults() {
 
   return (
     <div className="h-full bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 flex flex-col">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-violet-400 font-bold">
-          C
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-violet-400 font-bold shrink-0">
+            C
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-white truncate">
+              {t("calcResults.title")}
+            </h2>
+            <p className="text-xs text-zinc-500">
+              {t("calcResults.subtitle", { count: results.length })}
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-sm font-semibold text-white">
-            {t("calcResults.title")}
-          </h2>
-          <p className="text-xs text-zinc-500">
-            {t("calcResults.subtitle", { count: results.length })}
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={clearResults}
+          disabled={clearing || results.length === 0}
+          className="text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-red-300 hover:border-red-500/50 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition"
+          title={t("calcResults.clearTooltip")}
+        >
+          {clearing ? t("calcResults.clearing") : t("calcResults.clearBtn")}
+        </button>
       </div>
 
       <form onSubmit={saveRate} className="mb-3">

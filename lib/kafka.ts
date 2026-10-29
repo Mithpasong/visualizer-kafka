@@ -652,6 +652,14 @@ export function getCalcResults(): CalcResult[] {
   return state.calcResults ?? [];
 }
 
+export function clearCalcResults(): number {
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+  const n = state.calcResults.length;
+  state.calcResults = [];
+  return n;
+}
+
 export function getPartitionMessages(
   topic: string,
   partition: number
