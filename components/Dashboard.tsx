@@ -9,6 +9,7 @@ import CalcResults from "./CalcResults";
 import PartitionViewer from "./PartitionViewer";
 import LanguageSwitcher from "./LanguageSwitcher";
 import LoadingOverlay from "./LoadingOverlay";
+import StatsPanel from "./StatsPanel";
 import { assignTopicColors } from "@/lib/colors";
 import { useT } from "./I18nProvider";
 
@@ -359,6 +360,10 @@ export default function Dashboard() {
           style={matchedHeight}
         >
           <CalcResults />
+        </section>
+
+        <section className="col-span-12">
+          <StatsPanel />
         </section>
 
         <section className="col-span-12">
