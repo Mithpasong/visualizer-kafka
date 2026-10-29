@@ -134,6 +134,30 @@ const en: Dict = {
   "calcResults.confirmClear":
     "Clear all displayed results?\nThis does not delete Kafka messages — just the panel history.",
 
+  "stats.title": "Stats Consumer · {total} messages",
+  "stats.fanoutBadge": "Independent Consumer Group — fan-out",
+  "stats.notStarted": "(not started yet)",
+  "stats.operatorsLabel": "Operators",
+  "stats.topicsLabel": "By topic",
+  "stats.topicsEmpty": "No messages yet.",
+  "stats.partitionsLabel": "By partition",
+  "stats.partitionsEmpty": "—",
+  "stats.startedAt": "Started",
+  "stats.lastSeen": "Last message",
+  "stats.never": "never",
+  "stats.clearBtn": "Clear stats",
+  "stats.clearing": "Clearing…",
+  "stats.clearTooltip":
+    "Reset counters only. Kafka messages and the Consumer are kept.",
+  "stats.confirmClear":
+    "Reset all statistics?\nThe Kafka topic and the Consumer stay — only the counters shown here reset.",
+  "stats.refreshBtn": "↻ Resubscribe",
+  "stats.refreshing": "Resubscribing…",
+  "stats.refreshTooltip":
+    "Start a brand-new Consumer Group that reads every message from offset 0 — demonstrates replay.",
+  "stats.confirmRefresh":
+    "Resubscribe with a NEW Consumer Group?\nIt reads every message from offset 0 again, so counters will reflect the entire topic history.",
+
   "viewer.title": "Topic {topic} / Partition {partition}",
   "viewer.subtitle": "Messages stored in this partition ({count})",
   "viewer.loading": "Loading...",
@@ -278,6 +302,30 @@ const ko: Dict = {
     "표시된 결과를 모두 지웁니다 (Kafka 메시지는 그대로 유지)",
   "calcResults.confirmClear":
     "표시된 결과를 모두 지우시겠습니까?\nKafka의 실제 메시지는 삭제되지 않고 화면 내역만 지워집니다.",
+
+  "stats.title": "Stats Consumer · 총 {total}건",
+  "stats.fanoutBadge": "독립 Consumer Group — Fan-out",
+  "stats.notStarted": "(아직 시작 안 함)",
+  "stats.operatorsLabel": "연산자별",
+  "stats.topicsLabel": "토픽별",
+  "stats.topicsEmpty": "아직 메시지가 없습니다.",
+  "stats.partitionsLabel": "파티션별",
+  "stats.partitionsEmpty": "—",
+  "stats.startedAt": "시작",
+  "stats.lastSeen": "마지막 수신",
+  "stats.never": "없음",
+  "stats.clearBtn": "통계 지우기",
+  "stats.clearing": "지우는 중…",
+  "stats.clearTooltip":
+    "카운터만 초기화. Kafka 메시지와 Consumer 는 그대로 유지됩니다.",
+  "stats.confirmClear":
+    "통계를 모두 초기화하시겠습니까?\nKafka 토픽과 Consumer 는 그대로이고, 여기 표시된 카운터만 초기화됩니다.",
+  "stats.refreshBtn": "↻ 재구독",
+  "stats.refreshing": "재구독 중…",
+  "stats.refreshTooltip":
+    "새 Consumer Group 으로 offset 0 부터 전체 메시지를 다시 읽습니다 — Replay 데모.",
+  "stats.confirmRefresh":
+    "새 Consumer Group 으로 재구독할까요?\noffset 0 부터 전체 메시지를 다시 읽어서 토픽의 전체 이력이 카운터에 반영됩니다.",
 
   "viewer.title": "Topic {topic} / Partition {partition}",
   "viewer.subtitle": "이 파티션에 저장된 메시지 ({count}건)",

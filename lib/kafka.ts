@@ -61,6 +61,28 @@ export interface CalcResult {
   consumedAt: string;
 }
 
+export interface StatsSnapshot {
+  totalMessages: number;
+  operatorCounts: Record<CalcOperator, number>;
+  topicCounts: Record<string, number>;
+  partitionCounts: Record<string, Record<number, number>>;
+  lastConsumedAt: string | null;
+  startedAt: string | null;
+  groupId: string | null;
+}
+
+function createEmptyStats(): StatsSnapshot {
+  return {
+    totalMessages: 0,
+    operatorCounts: { '+': 0, '-': 0, '*': 0, '/': 0 },
+    topicCounts: {},
+    partitionCounts: {},
+    lastConsumedAt: null,
+    startedAt: null,
+    groupId: null,
+  };
+}
+
 interface KafkaState {
   kafka: Kafka;
   initialized: boolean;
@@ -76,6 +98,10 @@ interface KafkaState {
   consumerStarting: Promise<void> | null;
   consumerMaxPerSecond: number;
   nextConsumeSlotAt: number;
+  statsConsumer: Consumer | null;
+  statsConsumerStarting: Promise<void> | null;
+  statsSubscribedTopics: Set<string>;
+  stats: StatsSnapshot;
 }
 
 export interface ConsumerConfig {
@@ -107,6 +133,10 @@ function getKafka(): Kafka {
       consumerStarting: null,
       consumerMaxPerSecond: 0,
       nextConsumeSlotAt: 0,
+      statsConsumer: null,
+      statsConsumerStarting: null,
+      statsSubscribedTopics: new Set(),
+      stats: createEmptyStats(),
     };
   } else {
     const s = globalForKafka.kafkaState as Partial<KafkaState> & { kafka: Kafka };
@@ -122,6 +152,12 @@ function getKafka(): Kafka {
     if (!('consumerStarting' in s)) s.consumerStarting = null;
     if (typeof s.consumerMaxPerSecond !== 'number') s.consumerMaxPerSecond = 0;
     if (typeof s.nextConsumeSlotAt !== 'number') s.nextConsumeSlotAt = 0;
+    if (!('statsConsumer' in s)) s.statsConsumer = null;
+    if (!('statsConsumerStarting' in s)) s.statsConsumerStarting = null;
+    if (!(s.statsSubscribedTopics instanceof Set)) s.statsSubscribedTopics = new Set();
+    if (!s.stats || typeof s.stats !== 'object' || typeof s.stats.totalMessages !== 'number') {
+      s.stats = createEmptyStats();
+    }
   }
   return globalForKafka.kafkaState.kafka;
 }
@@ -330,6 +366,20 @@ export async function deleteTopic(name: string) {
       state.consumer = null;
       state.subscribedTopics.clear();
     }
+
+    if (state.statsConsumer) {
+      try {
+        await state.statsConsumer.disconnect();
+      } catch (err) {
+        console.warn('[kafka] stats consumer disconnect warning', err);
+      }
+      state.statsConsumer = null;
+      state.statsSubscribedTopics.clear();
+    }
+    if (state.stats) {
+      state.stats.topicCounts[name] = 0;
+      delete state.stats.partitionCounts[name];
+    }
   }
 
   const result = await withAdmin(async (admin) => {
@@ -340,6 +390,12 @@ export async function deleteTopic(name: string) {
   setTimeout(() => {
     refreshConsumer().catch((err) =>
       console.error('[kafka] auto-refresh consumer after delete failed', err)
+    );
+    refreshStatsConsumer().catch((err) =>
+      console.error(
+        '[kafka] auto-refresh stats consumer after delete failed',
+        err
+      )
     );
   }, 2000);
 
@@ -580,6 +636,128 @@ export async function refreshConsumer(): Promise<void> {
     state.consumerStarting = null;
   });
   await state.consumerStarting;
+}
+
+// --- Stats Consumer (fan-out demo) ---------------------------------------
+// 별도의 Consumer Group 으로 같은 토픽을 구독해서 통계만 집계한다.
+// Calc Consumer 와 offset / rate / clear 가 완전히 독립이다.
+async function startOrRestartStatsConsumer(): Promise<void> {
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+
+  const admin = state.kafka.admin();
+  await admin.connect();
+  let topicNames: string[] = [];
+  try {
+    topicNames = (await admin.listTopics()).filter((t) => !t.startsWith('__'));
+  } finally {
+    await admin.disconnect();
+  }
+  if (topicNames.length === 0) {
+    console.log('[kafka] no user topics yet, stats consumer not started');
+    return;
+  }
+
+  if (state.statsConsumer) {
+    try {
+      await state.statsConsumer.disconnect();
+    } catch (err) {
+      console.warn('[kafka] previous stats consumer disconnect warning', err);
+    }
+    state.statsConsumer = null;
+    state.statsSubscribedTopics.clear();
+  }
+
+  const groupId = `stats-reader-${Date.now()}`;
+  const consumer = state.kafka.consumer({
+    groupId,
+    sessionTimeout: 30000,
+    heartbeatInterval: 3000,
+  });
+  await consumer.connect();
+  await consumer.subscribe({ topics: topicNames, fromBeginning: true });
+
+  state.stats = createEmptyStats();
+  state.stats.startedAt = new Date().toISOString();
+  state.stats.groupId = groupId;
+
+  await consumer.run({
+    eachMessage: async ({ topic, partition, message }) => {
+      if (!message.value) return;
+      const raw = message.value.toString();
+      let parsed: any = raw;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        // leave as string
+      }
+
+      const stats = state.stats;
+      stats.totalMessages += 1;
+      stats.lastConsumedAt = new Date().toISOString();
+      stats.topicCounts[topic] = (stats.topicCounts[topic] ?? 0) + 1;
+      if (!stats.partitionCounts[topic]) stats.partitionCounts[topic] = {};
+      stats.partitionCounts[topic][partition] =
+        (stats.partitionCounts[topic][partition] ?? 0) + 1;
+
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        typeof parsed.operator === 'string' &&
+        parsed.operator in stats.operatorCounts
+      ) {
+        const op = parsed.operator as CalcOperator;
+        stats.operatorCounts[op] += 1;
+      }
+    },
+  });
+
+  state.statsConsumer = consumer;
+  for (const t of topicNames) state.statsSubscribedTopics.add(t);
+  console.log(
+    `[kafka] stats consumer running (group=${groupId}), subscribed to ${topicNames.length} topics`
+  );
+}
+
+export async function ensureStatsConsumer(): Promise<void> {
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+  if (state.statsConsumer) return;
+  if (state.statsConsumerStarting) {
+    await state.statsConsumerStarting;
+    return;
+  }
+  state.statsConsumerStarting = startOrRestartStatsConsumer().finally(() => {
+    state.statsConsumerStarting = null;
+  });
+  await state.statsConsumerStarting;
+}
+
+export async function refreshStatsConsumer(): Promise<void> {
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+  if (state.statsConsumerStarting) {
+    await state.statsConsumerStarting;
+    return;
+  }
+  state.statsConsumerStarting = startOrRestartStatsConsumer().finally(() => {
+    state.statsConsumerStarting = null;
+  });
+  await state.statsConsumerStarting;
+}
+
+export function getStats(): StatsSnapshot {
+  getKafka();
+  return globalForKafka.kafkaState!.stats;
+}
+
+export function clearStats(): void {
+  getKafka();
+  const state = globalForKafka.kafkaState!;
+  const prevGroup = state.stats.groupId;
+  state.stats = createEmptyStats();
+  state.stats.startedAt = new Date().toISOString();
+  state.stats.groupId = prevGroup;
 }
 
 export async function publishCalc(
