@@ -127,6 +127,12 @@ const en: Dict = {
   "calcResults.rateSaving": "Saving…",
   "calcResults.rateCurrent": "Current: {rate}",
   "calcResults.rateUnlimited": "unlimited",
+  "calcResults.clearBtn": "Clear history",
+  "calcResults.clearing": "Clearing…",
+  "calcResults.clearTooltip":
+    "Remove all displayed results (Kafka messages are kept in topics)",
+  "calcResults.confirmClear":
+    "Clear all displayed results?\nThis does not delete Kafka messages — just the panel history.",
 
   "viewer.title": "Topic {topic} / Partition {partition}",
   "viewer.subtitle": "Messages stored in this partition ({count})",
@@ -266,6 +272,12 @@ const ko: Dict = {
   "calcResults.rateSaving": "저장 중…",
   "calcResults.rateCurrent": "현재: {rate}",
   "calcResults.rateUnlimited": "제한 없음",
+  "calcResults.clearBtn": "내역 지우기",
+  "calcResults.clearing": "지우는 중…",
+  "calcResults.clearTooltip":
+    "표시된 결과를 모두 지웁니다 (Kafka 메시지는 그대로 유지)",
+  "calcResults.confirmClear":
+    "표시된 결과를 모두 지우시겠습니까?\nKafka의 실제 메시지는 삭제되지 않고 화면 내역만 지워집니다.",
 
   "viewer.title": "Topic {topic} / Partition {partition}",
   "viewer.subtitle": "이 파티션에 저장된 메시지 ({count}건)",
