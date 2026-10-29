@@ -352,7 +352,7 @@ export async function getBrokers(): Promise<{
 }> {
   return withAdmin(async (admin) => {
     const cluster = await admin.describeCluster();
-    const stable = stabilizeController(cluster.controller);
+    const stable = stabilizeController(cluster.controller ?? -1);
     return {
       brokers: cluster.brokers.map((b) => ({
         id: b.nodeId,
@@ -362,6 +362,30 @@ export async function getBrokers(): Promise<{
       controller: stable,
     };
   });
+}
+
+export interface BrokerStatus extends BrokerMetadata {
+  alive: boolean;
+}
+
+export async function getAllBrokersWithStatus(): Promise<{
+  brokers: BrokerStatus[];
+  controller: number;
+}> {
+  let live: { brokers: BrokerMetadata[]; controller: number };
+  try {
+    live = await getBrokers();
+  } catch {
+    live = { brokers: [], controller: -1 };
+  }
+  const aliveMap = new Map(live.brokers.map((b) => [b.id, b]));
+  const brokers: BrokerStatus[] = BROKERS.map((b) => {
+    const found = aliveMap.get(b.id);
+    return found
+      ? { ...found, alive: true }
+      : { id: b.id, host: b.name, port: b.externalPort, alive: false };
+  });
+  return { brokers, controller: live.controller };
 }
 
 async function getProducer(): Promise<Producer> {

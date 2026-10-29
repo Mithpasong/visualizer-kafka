@@ -31,6 +31,7 @@ export interface BrokerMeta {
   id: number;
   host: string;
   port: number;
+  alive: boolean;
 }
 
 export interface Notice {
@@ -57,6 +58,10 @@ export default function Dashboard() {
   const [pendingOp, setPendingOp] = useState<
     { kind: "create" | "delete"; name: string } | null
   >(null);
+  const [pendingBrokerAction, setPendingBrokerAction] = useState<{
+    id: number;
+    action: "stop" | "start";
+  } | null>(null);
   const [viewer, setViewer] = useState<{
     topic: string;
     partition: number;
@@ -194,7 +199,53 @@ export default function Dashboard() {
 
   const matchedHeight = producerHeight ? { height: producerHeight } : undefined;
 
-  const connected = brokers.length > 0 && !error;
+  const aliveBrokers = useMemo(() => brokers.filter((b) => b.alive), [brokers]);
+  const connected = aliveBrokers.length > 0 && !error;
+
+  const brokerAction = useCallback(
+    async (id: number, action: "stop" | "start") => {
+      const msgKey =
+        action === "stop"
+          ? "brokerGrid.confirmStop"
+          : "brokerGrid.confirmStart";
+      if (!confirm(t(msgKey, { id }))) return;
+      setPendingBrokerAction({ id, action });
+      try {
+        const res = await fetch(`/api/brokers/${id}/action`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          pushNotice({
+            type: "error",
+            message: t("brokerGrid.actionFailed", {
+              id,
+              action,
+              msg: data.error,
+            }),
+          });
+          return;
+        }
+        pushNotice({
+          type: action === "stop" ? "info" : "success",
+          message: t(
+            action === "stop"
+              ? "brokerGrid.noticeStopped"
+              : "brokerGrid.noticeStarted",
+            { id }
+          ),
+        });
+        await fetchAll();
+      } catch (err: any) {
+        pushNotice({ type: "error", message: err?.message ?? String(err) });
+      } finally {
+        setPendingBrokerAction(null);
+      }
+    },
+    [fetchAll, pushNotice, t]
+  );
 
   return (
     <main className="min-h-screen p-6 max-w-[1800px] mx-auto">
@@ -218,7 +269,10 @@ export default function Dashboard() {
               }`}
             />
             {connected
-              ? t("status.connected", { count: brokers.length })
+              ? t("status.connected", {
+                  count: aliveBrokers.length,
+                  total: brokers.length,
+                })
               : t("status.disconnected")}
           </span>
           <a
@@ -249,7 +303,7 @@ export default function Dashboard() {
         >
           <CreateTopicForm
             onCreate={createTopic}
-            maxBrokers={brokers.length || 6}
+            maxBrokers={aliveBrokers.length || 6}
           />
         </section>
         <section
@@ -326,6 +380,8 @@ export default function Dashboard() {
               setViewer({ topic, partition })
             }
             topicColors={topicColors}
+            onBrokerAction={brokerAction}
+            pendingBrokerAction={pendingBrokerAction}
           />
         </section>
       </div>

@@ -11,7 +11,7 @@ const en: Dict = {
   "app.title": "Kafka Visualizer",
   "app.subtitle":
     "Create / delete Kafka topics and visualize cluster distribution",
-  "status.connected": "Cluster connected ({count} brokers)",
+  "status.connected": "Cluster connected ({count}/{total} brokers)",
   "status.disconnected": "Cluster disconnected",
   "status.kafkaUi": "Kafka UI ↗",
   "error.connectionFailed": "Connection failed:",
@@ -70,6 +70,22 @@ const en: Dict = {
   "brokerGrid.justCreated": "Just created here",
   "brokerGrid.justPublished":
     "Data landed here. Click to view details",
+  "brokerGrid.downBadge": "DOWN",
+  "brokerGrid.statusDown": "offline — partitions reassigned",
+  "brokerGrid.stopBtn": "Stop",
+  "brokerGrid.startBtn": "Start",
+  "brokerGrid.stopping": "Stopping…",
+  "brokerGrid.starting": "Starting…",
+  "brokerGrid.stopTooltip":
+    "docker stop kafka-{id} — Controller/Leader will be re-elected",
+  "brokerGrid.startTooltip": "docker start kafka-{id} — bring it back",
+  "brokerGrid.confirmStop":
+    "Stop Broker {id}?\nThis will trigger Leader/Controller re-election.",
+  "brokerGrid.confirmStart": "Start Broker {id}?",
+  "brokerGrid.noticeStopped": "⏻ Broker {id} stopped",
+  "brokerGrid.noticeStarted": "✓ Broker {id} started",
+  "brokerGrid.actionFailed":
+    "Broker {id} {action} failed: {msg}",
 
   "calcProducer.title": "Producer · Publish calculation",
   "calcProducer.subtitle":
@@ -135,7 +151,7 @@ const ko: Dict = {
   "app.title": "Kafka Visualizer",
   "app.subtitle":
     "Kafka Topic 생성·삭제, 클러스터 분산 시각화",
-  "status.connected": "Cluster 연결됨 ({count}대 Broker)",
+  "status.connected": "Cluster 연결됨 ({count}/{total}대 Broker)",
   "status.disconnected": "Cluster 연결 끊김",
   "status.kafkaUi": "Kafka UI ↗",
   "error.connectionFailed": "연결 실패:",
@@ -193,6 +209,22 @@ const ko: Dict = {
   "brokerGrid.justCreated": "여기에 방금 작업하신 것이 생겼습니다",
   "brokerGrid.justPublished":
     "여기에 데이터가 들어갔습니다. 상세하게 보려면 클릭하세요",
+  "brokerGrid.downBadge": "DOWN",
+  "brokerGrid.statusDown": "오프라인 — 파티션 재배정됨",
+  "brokerGrid.stopBtn": "Stop",
+  "brokerGrid.startBtn": "Start",
+  "brokerGrid.stopping": "정지 중…",
+  "brokerGrid.starting": "시작 중…",
+  "brokerGrid.stopTooltip":
+    "docker stop kafka-{id} — Controller/Leader 재선출 발생",
+  "brokerGrid.startTooltip": "docker start kafka-{id} — 다시 켜기",
+  "brokerGrid.confirmStop":
+    "Broker {id} 을(를) 정지하시겠습니까?\nLeader/Controller 재선출이 발생합니다.",
+  "brokerGrid.confirmStart": "Broker {id} 을(를) 시작하시겠습니까?",
+  "brokerGrid.noticeStopped": "⏻ Broker {id} 정지됨",
+  "brokerGrid.noticeStarted": "✓ Broker {id} 시작됨",
+  "brokerGrid.actionFailed":
+    "Broker {id} {action} 실패: {msg}",
 
   "calcProducer.title": "Producer · 계산 메시지 발행",
   "calcProducer.subtitle":
