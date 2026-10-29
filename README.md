@@ -375,6 +375,12 @@ Metadata 재선출 중 kafkajs 가 내부 재시도로 복구한 로그입니다
 ### Broker 메모리 부족으로 재시작 반복
 Docker Desktop → Settings → Resources 에서 메모리 할당 6GB 이상으로.
 
+### `webpack.cache.PackFileCacheStrategy` / "Fast Refresh had to perform a full reload"
+Windows + OneDrive 경로 + 폴더명에 쉼표(`kafka,rabbitMQ`)가 섞이면 `.next/cache/webpack/*.pack.gz` 가 가끔 깨집니다. 두 가지 조치가 이미 적용돼 있어요:
+
+- `next.config.js` 가 **dev 모드에서는 webpack cache 를 memory 로** 전환 — pack 파일 자체를 안 써서 corruption 발생 안 함
+- 그래도 뭔가 꼬였다 싶으면 `npm run clean` → `.next` 와 `tsconfig.tsbuildinfo` 삭제
+
 ---
 
 ## 📸 스크린샷 재생성
