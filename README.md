@@ -21,7 +21,7 @@ Topic 생성, 메시지 발행, Leader 재선출, Fan-out, Replay — Kafka의 �
 
 ## ✨ 이 프로젝트는 무엇인가요
 
-**교육용 Kafka 시각화 데모**입니다. 시뮬레이션이 아니라 **진짜 Kafka**를 Docker로 띄우고, kafkajs 로 붙어서 하는 작업이 UI에 즉시 반영됩니다.
+**Mithpasong 이 만든 kafka 시각화 데모 모델입니다.** 시뮬레이션이 아니라 **진짜 Kafka**를 Docker로 띄우고, kafkajs 로 붙어서 하는 작업이 UI에 즉시 반영됩니다.
 
 문서로만 보던 개념들을 **직접 눌러보면서** 체감할 수 있어요:
 
@@ -30,8 +30,6 @@ Topic 생성, 메시지 발행, Leader 재선출, Fan-out, Replay — Kafka의 �
 - **두 개의 독립 Consumer Group**이 같은 메시지를 각자 다른 목적으로 처리하는 Fan-out
 - Consumer 처리량 제한 시 Producer 와 Consumer 가 **비동기로 분리**되는 모습
 - 메시지는 사라지지 않고 **offset 0부터 Replay** 가능하다는 것
-
-**대상:** Kafka 배우는 학생, 백엔드 엔지니어, 인터뷰 때 화이트보드 그리던 사람.
 
 ---
 
