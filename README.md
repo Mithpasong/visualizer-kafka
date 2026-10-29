@@ -379,9 +379,17 @@ Docker Desktop → Settings → Resources 에서 메모리 할당 6GB 이상으�
 
 ---
 
-## 📸 스크린샷 추가하기
+## 📸 스크린샷 재생성
 
-`docs/screenshots/` 디렉토리에 아래 파일명으로 PNG 를 추가하면 README 에 자동 반영됩니다. 자세한 가이드는 [`docs/screenshots/README.md`](docs/screenshots/README.md) 참고.
+이 README 의 모든 스크린샷은 Playwright 로 자동 캡처됐습니다:
+
+```bash
+docker compose up -d
+npx next dev -p 3042           # 캡처용 포트
+npm run capture:screenshots    # 다른 터미널
+```
+
+자세한 가이드: [`docs/screenshots/README.md`](docs/screenshots/README.md)
 
 ---
 

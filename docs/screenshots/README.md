@@ -1,6 +1,27 @@
 # 스크린샷 가이드
 
-메인 `README.md` 가 참조하는 이미지 목록입니다. 아래 파일명으로 PNG 를 이 폴더에 넣으면 README 에 자동 노출됩니다.
+메인 `README.md` 가 참조하는 이미지 목록입니다.
+
+## 🤖 자동 생성 (추천)
+
+```bash
+# 1. Kafka + dev 서버 띄우기
+docker compose up -d
+npx next dev -p 3042
+
+# 2. 다른 터미널에서
+npm run capture:screenshots
+```
+
+Playwright 가 자동으로 demo 토픽 (`orders`, `clicks`, `payments`) 생성 → 20개 메시지 publish → Consumer 소비 대기 → 각 패널별 PNG 를 이 폴더에 저장합니다.
+
+스크립트: [`scripts/capture-screenshots.mjs`](../../scripts/capture-screenshots.mjs)
+
+> **참고**: 이미 토픽이 있으면 재사용합니다. 깨끗한 상태로 돌리고 싶으면 수동으로 삭제 후 재실행.
+
+## ✍️ 수동 캡처도 가능
+
+아래 파일명으로 PNG 를 이 폴더에 넣으면 README 에 자동 노출됩니다.
 
 > **권장 해상도**: 1600 px 가로 (고해상도 디스플레이에서도 또렷) · PNG · 다크 테마 유지
 
